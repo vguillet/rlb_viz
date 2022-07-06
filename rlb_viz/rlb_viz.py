@@ -7,6 +7,7 @@
 # Built-in/Generic Imports
 import json
 import os
+import queue
 
 # Libs
 import PyQt5
@@ -20,18 +21,17 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped, Point
 from sensor_msgs.msg import JointState, LaserScan
-from rlb_utils.msg import TeamComm
+from rlb_utils.msg import Goal, TeamComm
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import numpy as np
 import math
 
-import matplotlib
 import matplotlib.patches as mpatches
+from matplotlib.collections import PatchCollection
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 
 from matplotlib.figure import Figure
-import matplotlib.patheffects as path_effects
 
 from functools import partial
 
@@ -137,8 +137,18 @@ class RLB_viz_gui():
         # -> To remove
         self.placeholder_callback()
 
+        # self.team_comms_msgs = queue.Queue()
+
         # ----------------------------------- Goal subscribers
-        self.goal_subscriber = []
+        self.goal_subscription = self.node.create_subscription(
+            msg_type=Goal,
+            topic="/goals_backlog",
+            # topic="/sim_node_publisher/rlb/targets",
+            callback=self.goal_subscriber_callback,
+            qos_profile=qos
+            )
+
+        # self.goals_msgs = queue.Queue()
 
         # ==================================================== Final setup
         # -> Spin once
@@ -172,17 +182,49 @@ class RLB_viz_gui():
             self.__set_goal(msg=msg)
 
         elif msg.type == "Collision":
+            from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+
             msg_content = json.loads(msg.memo)
 
             cone_ref = msg_content["cone_triggered"]
 
-            if cone_ref is not None:
-                self.team_members[msg.robot_id][cone_ref]["triggered"] = True
-            else:
-                from rlb_controller.robot_parameters import vision_cones
+            if msg_content["collision_state"] in [1, 2]:
+                self.__clear_triggers(msg=msg)
 
-                for cone_ref in vision_cones.keys():
-                    self.team_members[msg.robot_id][cone_ref]["triggered"] = False
+                # -> Flag triggered cone
+                if cone_ref in vision_cones.keys():
+                    self.team_members[msg.robot_id][cone_ref]["triggered"] = True
+                else:
+                    self.team_members[msg.robot_id][cone_ref][msg_content["side"] + "_triggered"] = True  
+
+                # -> Make relevant patch collection visible
+                for side_cone_ref in side_vision_cones.keys():
+                    self.team_members[msg.robot_id][side_cone_ref][msg_content["side"] + "_vision_cone_artist"].set(visible=True)
+            
+            elif msg_content["collision_state"] == 0:
+                self.__clear_triggers(msg=msg)
+
+        # -> Add msg to team_comms text area
+        self.ui.team_comms_msgs.setPlainText(str(msg))
+
+    def __clear_triggers(self, msg):
+        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+
+        for cone_ref in vision_cones.keys():
+            self.team_members[msg.robot_id][cone_ref]["triggered"] = False
+
+        for cone_ref in side_vision_cones.keys():
+            self.team_members[msg.robot_id][cone_ref]["l_triggered"] = False
+            self.team_members[msg.robot_id][cone_ref]["r_triggered"] = False
+
+            # -> Hide side collision patches
+            self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
+
+
+    def goal_subscriber_callback(self, msg):
+        # -> Add msg to goals text area
+        self.ui.goals_msgs.setPlainText(str(msg))
 
     def pose_subscriber_callback(self, robot_id, msg):
         # -> Update position
@@ -292,7 +334,7 @@ class RLB_viz_gui():
             # -> Update scan circle position
             # self.team_members[robot_id]["scan_circle_artist"].center = x, y
 
-            from rlb_controller.robot_parameters import vision_cones
+            from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
             for cone_ref in vision_cones.keys():
                 # -> Update scan vision cone position and orientation
@@ -316,14 +358,53 @@ class RLB_viz_gui():
                 else:
                     self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(fc=(0,1,0,0.5))
 
-            # -> Update ccollision circle position
+            for cone_ref in side_vision_cones.keys():
+                # -> Update scan vision cone position and orientation
+                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_center((x, y))
+                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_center((x, y))
+
+                if self.team_members[robot_id]["pose"]["w"] < 0:
+                    l_theta_1 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                    l_theta_2 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+
+                    r_theta_1 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                    r_theta_2 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+
+                else:
+                    l_theta_1 = 90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                    l_theta_2 = 90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+
+                    r_theta_1 = -90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                    r_theta_2 = -90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+
+                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta1(l_theta_1)
+                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta2(l_theta_2)
+
+                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta1(r_theta_1)
+                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta2(r_theta_2)
+
+                # -> Update scan vision cone color based on collision detected
+                if self.team_members[robot_id][cone_ref]["l_triggered"]:
+                    
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(1,0,0,0.5))
+
+                else:
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(0,1,0,0.5))
+
+                if self.team_members[robot_id][cone_ref]["r_triggered"]:
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(1,0,0,0.5))
+
+                else:
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(0,1,0,0.5))
+
+            # -> Update collision circle position
             self.team_members[robot_id]["collision_circle_artist"].center = x, y
 
         # -> Blit updated artists
         self.bm.update()
 
     def remove_robot(self, robot_id):
-        from rlb_controller.robot_parameters import vision_cones
+        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
         try:
             # -> Delete subscribers
@@ -339,7 +420,11 @@ class RLB_viz_gui():
             self.bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
 
             for cone_ref in vision_cones.keys():
-                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])
+                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
+                
+            for cone_ref in vision_cones.keys():
+                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["l_vision_cone_artist"])
+                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["r_vision_cone_artist"])
 
             # -> Remove widget
             for i in reversed(range(self.ui.fleet_overview_layout.count())): 
@@ -354,7 +439,7 @@ class RLB_viz_gui():
             pass
 
     def add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones
+        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
         # -> Create entry in team members dictionary
         (pose_artist,) = self.sc.axes.plot([], [], 'bo')
@@ -443,6 +528,41 @@ class RLB_viz_gui():
             # -> Add artist to blit
             self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
 
+        # -> Create left and right patches and patch collections
+        l_vision_cone_lst = []
+        r_vision_cone_lst = []
+
+        for cone_ref, cone_properties in side_vision_cones.items():
+            self.team_members[msg.robot_id][cone_ref] = {
+                "treshold": cone_properties["threshold"],
+                "angle": cone_properties["angle"],
+                "l_triggered": False,
+                "r_triggered": False,
+                "l_vision_cone_artist": mpatches.Wedge(
+                    (0, 0), 
+                    cone_properties["threshold"], 
+                    90 - cone_properties["angle"]/2, 
+                    90 + cone_properties["angle"]/2,
+                    fc=(0,1,0,0.5)),
+                "r_vision_cone_artist": mpatches.Wedge(
+                    (0, 0), 
+                    cone_properties["threshold"], 
+                    -90 - cone_properties["angle"]/2, 
+                    -90 + cone_properties["angle"]/2,
+                    fc=(0,1,0,0.5)),
+            }
+
+            # -> Hide side collision patches
+            self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
+
+            # -> Add artist to plot
+            self.sc.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
+            self.sc.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+
+            # -> Add artist to blit
+            self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
+            self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
 
         # -> Update member widget
         self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setText(msg.robot_id)
