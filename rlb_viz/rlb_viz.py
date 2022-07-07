@@ -8,6 +8,7 @@
 import json
 import os
 import queue
+import math
 
 # Libs
 import PyQt5
@@ -94,7 +95,8 @@ class RLB_viz_gui():
         # -> Create plotter timer
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.plot_robots)
-        self.plot_timer.start(10)
+        self.plot_timer.setInterval(10)
+        self.plot_timer.start()
         
         # -> Create canvas tools widget
         toolbar = NavigationToolbar(self.sc, self.ui)
@@ -106,7 +108,8 @@ class RLB_viz_gui():
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
         self.spin_timer.timeout.connect(self.__node_spinner)
-        self.spin_timer.start(1)
+        self.spin_timer.setInterval(1)
+        self.spin_timer.start(0.1)
 
         # ==================================================== Setup storage variables
         self.team_members = {}
@@ -259,8 +262,60 @@ class RLB_viz_gui():
                 scan[i] = None
 
         self.team_members[robot_id]["lazer_scan"] = scan
+        
+        # -> Update lidar point cloud
+        if self.ui.lidar_view_toggle.isChecked():
+            self.team_members[robot_id]["scan_circle_artist"].set(visible=True)
+            self.team_members[robot_id]["lazer_scan_point_cloud"].set(visible=True)
+
+            # -> Update scan circle position
+            x = round(self.team_members[robot_id]["pose"]["x"], 3)
+            y = round(self.team_members[robot_id]["pose"]["y"], 3)
+
+            self.team_members[robot_id]["scan_circle_artist"].center = x, y
+            self.team_members[robot_id]["scan_circle_artist"].set_radius(self.ui.lazer_scan_slider.value()/10)
+
+            # -> Update lazer scan point cloud
+            points_x_list, points_y_list = self.__get_lazer_scan_point_cloud(robot_id=robot_id)
+
+            self.team_members[robot_id]["lazer_scan_point_cloud"].set_data(
+                points_x_list,
+                points_y_list
+                )
+
+        else:
+            self.team_members[robot_id]["scan_circle_artist"].set(visible=False)
+            self.team_members[robot_id]["lazer_scan_point_cloud"].set(visible=False)
 
     # ================================================= Utils
+
+    def __get_lazer_scan_point_cloud(self, robot_id):
+        point_cloud_x = []
+        point_cloud_y = []
+
+        # -> Get orientation and pose
+        pose_x = self.team_members[robot_id]["pose"]["x"]
+        pose_y = self.team_members[robot_id]["pose"]["y"]
+        orientation = self.team_members[robot_id]["pose"]["w"]
+
+        # -> Correct coordinate system
+        if orientation < 0:
+            orientation = (180 - abs(orientation)) + 180       
+
+        orientation -= 90
+
+        if orientation < 0:
+            orientation += 360
+
+        orientation = 360 - orientation
+    
+        for i, point_distance in enumerate(self.team_members[robot_id]["lazer_scan"]):
+            if point_distance is not None:
+                if point_distance < self.ui.lazer_scan_slider.value()/10:
+                    point_cloud_x.append(point_distance * math.sin((orientation - i) * math.pi/180) + pose_x)
+                    point_cloud_y.append(point_distance * math.cos((orientation - i) * math.pi/180) + pose_y)
+
+        return point_cloud_x, point_cloud_y
 
     def __set_goal(self, msg):
         # -> Save goal to member's dict
@@ -307,96 +362,117 @@ class RLB_viz_gui():
             self.team_members[robot_id]["pose_artist"].set_xdata(x)
             self.team_members[robot_id]["pose_artist"].set_ydata(y)
 
-            # -> Update goal
-            goal_x = self.team_members[robot_id]["goal"]["x"]
-            goal_y = self.team_members[robot_id]["goal"]["y"]
+            # -------------------------- Update goal
+            if self.ui.goals_view_toggle.isChecked():
+                self.team_members[robot_id]["goal_artist"].set(visible=True)
+                self.team_members[robot_id]["goal_ray_artist"].set(visible=True)
 
-            self.team_members[robot_id]["goal_artist"].set_data(
-                goal_x,
-                goal_y
-                )
+                goal_x = self.team_members[robot_id]["goal"]["x"]
+                goal_y = self.team_members[robot_id]["goal"]["y"]
 
-            # -> Update goal ray
-            if goal_x:
-                self.team_members[robot_id]["goal_ray_artist"].set_xdata([x, goal_x[0]])
+                self.team_members[robot_id]["goal_artist"].set_data(
+                    goal_x,
+                    goal_y
+                    )
 
-                self.team_members[robot_id]["goal_ray_artist"].set_ydata([y, goal_y[0]])
+                # -> Update goal ray
+                if goal_x:
+                    self.team_members[robot_id]["goal_ray_artist"].set_xdata([x, goal_x[0]])
+
+                    self.team_members[robot_id]["goal_ray_artist"].set_ydata([y, goal_y[0]])
+
+                else:
+                    self.team_members[robot_id]["goal_ray_artist"].set_xdata([])
+                    self.team_members[robot_id]["goal_ray_artist"].set_ydata([])
 
             else:
-                self.team_members[robot_id]["goal_ray_artist"].set_xdata([])
-                self.team_members[robot_id]["goal_ray_artist"].set_ydata([])
+                self.team_members[robot_id]["goal_artist"].set(visible=False)
+                self.team_members[robot_id]["goal_ray_artist"].set(visible=False)
 
 
             # -> Update annoation position
             self.team_members[robot_id]["label_artist"].xy = (x, y)
             self.team_members[robot_id]["label_artist"].set_position((x+0.05, y+0.1))
 
-            # -> Update scan circle position
-            # self.team_members[robot_id]["scan_circle_artist"].center = x, y
-
+            # -------------------------- Update vision cones
             from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
-            for cone_ref in vision_cones.keys():
-                # -> Update scan vision cone position and orientation
-                self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_center((x, y))
+            if self.ui.vision_cones_toggle.isChecked():
+                # -> Update frontal cones
+                for cone_ref in vision_cones.keys():
+                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(visible=True)
 
-                if self.team_members[robot_id]["pose"]["w"] < 0:
-                    theta_1 = 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    theta_2 = 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                    # -> Update scan vision cone position and orientation
+                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_center((x, y))
 
-                else:
-                    theta_1 = self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    theta_2 = self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                    if self.team_members[robot_id]["pose"]["w"] < 0:
+                        theta_1 = 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        theta_2 = 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_theta1(theta_1)
-                self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_theta2(theta_2)
+                    else:
+                        theta_1 = self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        theta_2 = self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                # -> Update scan vision cone color based on collision detected
-                if self.team_members[robot_id][cone_ref]["triggered"]:
-                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(fc=(1,0,0,0.5))
+                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_theta1(theta_1)
+                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set_theta2(theta_2)
 
-                else:
-                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(fc=(0,1,0,0.5))
+                    # -> Update scan vision cone color based on collision detected
+                    if self.team_members[robot_id][cone_ref]["triggered"]:
+                        self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(fc=(1,0,0,0.5))
 
-            for cone_ref in side_vision_cones.keys():
-                # -> Update scan vision cone position and orientation
-                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_center((x, y))
-                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_center((x, y))
+                    else:
+                        self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(fc=(0,1,0,0.5))
 
-                if self.team_members[robot_id]["pose"]["w"] < 0:
-                    l_theta_1 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    l_theta_2 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                # -> Update side cones
+                for cone_ref in side_vision_cones.keys():
+                    # -> Update scan vision cone position and orientation
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_center((x, y))
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_center((x, y))
 
-                    r_theta_1 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    r_theta_2 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                    if self.team_members[robot_id]["pose"]["w"] < 0:
+                        l_theta_1 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        l_theta_2 = 90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                else:
-                    l_theta_1 = 90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    l_theta_2 = 90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                        r_theta_1 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        r_theta_2 = -90 + 360 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                    r_theta_1 = -90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
-                    r_theta_2 = -90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
+                    else:
+                        l_theta_1 = 90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        l_theta_2 = 90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta1(l_theta_1)
-                self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta2(l_theta_2)
+                        r_theta_1 = -90 + self.team_members[robot_id]["pose"]["w"] - self.team_members[robot_id][cone_ref]["angle"]/2
+                        r_theta_2 = -90 + self.team_members[robot_id]["pose"]["w"] + self.team_members[robot_id][cone_ref]["angle"]/2
 
-                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta1(r_theta_1)
-                self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta2(r_theta_2)
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta1(l_theta_1)
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set_theta2(l_theta_2)
 
-                # -> Update scan vision cone color based on collision detected
-                if self.team_members[robot_id][cone_ref]["l_triggered"]:
-                    
-                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(1,0,0,0.5))
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta1(r_theta_1)
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set_theta2(r_theta_2)
 
-                else:
-                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(0,1,0,0.5))
+                    # -> Update scan vision cone color based on collision detected
+                    if self.team_members[robot_id][cone_ref]["l_triggered"]:
+                        
+                        self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(1,0,0,0.5))
 
-                if self.team_members[robot_id][cone_ref]["r_triggered"]:
-                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(1,0,0,0.5))
+                    else:
+                        self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(fc=(0,1,0,0.5))
 
-                else:
-                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(0,1,0,0.5))
+                    if self.team_members[robot_id][cone_ref]["r_triggered"]:
+                        self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(1,0,0,0.5))
 
+                    else:
+                        self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(fc=(0,1,0,0.5))
+            
+            else:
+                # -> Update frontal cones
+                for cone_ref in vision_cones.keys():
+                    self.team_members[robot_id][cone_ref]["vision_cone_artist"].set(visible=False)
+
+                # -> Update side cones
+                for cone_ref in side_vision_cones.keys():
+                    self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
+                    self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
+            
             # -> Update collision circle position
             self.team_members[robot_id]["collision_circle_artist"].center = x, y
 
@@ -422,7 +498,7 @@ class RLB_viz_gui():
             for cone_ref in vision_cones.keys():
                 self.bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
                 
-            for cone_ref in vision_cones.keys():
+            for cone_ref in side_vision_cones.keys():
                 self.bm.remove_artist(self.team_members[robot_id][cone_ref]["l_vision_cone_artist"])
                 self.bm.remove_artist(self.team_members[robot_id][cone_ref]["r_vision_cone_artist"])
 
@@ -445,7 +521,8 @@ class RLB_viz_gui():
         (pose_artist,) = self.sc.axes.plot([], [], 'bo')
         (goal_artist,) = self.sc.axes.plot([], [], '-o', linewidth=0.1)
         (goal_ray_artist,) = self.sc.axes.plot([0, 0], [0, 0], linestyle='dashed', linewidth=1., color='blue')
-
+        (lazer_scan_point_cloud_artist, ) = self.sc.axes.plot([], [], '.', markersize=1, color="black")
+        
         self.team_members[msg.robot_id] = {
             # ---------------------------------------- Base setup
             "overview_widget": Member_overview_widget(),
@@ -479,16 +556,17 @@ class RLB_viz_gui():
             # ---------------------------------------- Lazer scan setup
             "lazer_scan_subscriber": None,
             "lazer_scan": None,
-            # "scan_circle_artist": mpatches.Circle(
-            #     (0, 0),
-            #     collision_treshold,
-            #     fill=False,
-            #     linestyle="--",
-            #     linewidth=0.1
-            #     ),
+            "lazer_scan_point_cloud": lazer_scan_point_cloud_artist,
+            "scan_circle_artist": mpatches.Circle(
+                (0, 0),
+                self.ui.lazer_scan_slider.value()/10,
+                fill=False,
+                linestyle="--",
+                linewidth=0.1
+                ),
             "collision_circle_artist": mpatches.Circle(
                 (0, 0),
-                0.15,
+                0.10,
                 fill=False,
                 color="black",
                 linewidth=1
@@ -496,15 +574,16 @@ class RLB_viz_gui():
         }
 
         # -> Add patches to axes
-        # self.sc.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.sc.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
         self.sc.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
 
         # -> Add artist to blit
         self.bm.add_artist(pose_artist)
         self.bm.add_artist(goal_artist)
         self.bm.add_artist(goal_ray_artist)
+        self.bm.add_artist(lazer_scan_point_cloud_artist)
 
-        # self.bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
         self.bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
         self.bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
 
@@ -527,10 +606,6 @@ class RLB_viz_gui():
 
             # -> Add artist to blit
             self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
-
-        # -> Create left and right patches and patch collections
-        l_vision_cone_lst = []
-        r_vision_cone_lst = []
 
         for cone_ref, cone_properties in side_vision_cones.items():
             self.team_members[msg.robot_id][cone_ref] = {
@@ -641,11 +716,13 @@ class MplCanvas(FigureCanvasQTAgg):
         self.setFocus()
 
     def built_canvas(self):
-        x_min = -2.5
-        x_max = 2.5
 
-        y_min = -2.5
-        y_max = 2.5
+
+        x_min = -3
+        x_max = 3
+
+        y_min = -3
+        y_max = 3
 
         self.axes = self.fig.add_subplot(111)
         # self.axes.axis("off")

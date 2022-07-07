@@ -16,6 +16,79 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="vision_cones_toggle">
+        <property name="text">
+         <string>Vision cones</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="goals_view_toggle">
+        <property name="text">
+         <string>Goals</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="Line" name="line">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="lidar_view_toggle">
+        <property name="text">
+         <string>Lidar</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSlider" name="lazer_scan_slider">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>110</width>
+          <height>16777215</height>
+         </size>
+        </property>
+        <property name="maximum">
+         <number>50</number>
+        </property>
+        <property name="value">
+         <number>15</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
      <layout class="QVBoxLayout" name="main_layout"/>
     </item>
    </layout>
@@ -99,7 +172,7 @@
           <x>0</x>
           <y>0</y>
           <width>368</width>
-          <height>350</height>
+          <height>403</height>
          </rect>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -165,7 +238,7 @@
               <x>0</x>
               <y>0</y>
               <width>360</width>
-              <height>139</height>
+              <height>86</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_7">
@@ -218,7 +291,7 @@
               <x>0</x>
               <y>0</y>
               <width>360</width>
-              <height>139</height>
+              <height>86</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_8">
@@ -250,5 +323,22 @@
   </widget>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>lidar_view_toggle</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lazer_scan_slider</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>353</x>
+     <y>188</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>415</x>
+     <y>187</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>
