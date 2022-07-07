@@ -492,7 +492,8 @@ class RLB_viz_gui():
             self.bm.remove_artist(self.team_members[robot_id]["goal_artist"])
             self.bm.remove_artist(self.team_members[robot_id]["goal_ray_artist"])
             self.bm.remove_artist(self.team_members[robot_id]["label_artist"])
-            # self.bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
+            self.bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
+            self.bm.remove_artist(self.team_members[robot_id]["lazer_scan_point_cloud"])
             self.bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
 
             for cone_ref in vision_cones.keys():
