@@ -43,6 +43,7 @@ from .Blit_manager import BlitManager
 from networkx.readwrite import json_graph
 import networkx as nx
 
+
 # from rlb_controller.robot_parameters import *
 
 ##################################################################################################################
@@ -143,9 +144,11 @@ class RLB_viz_gui():
         # self.team_comms_msgs = queue.Queue()
 
         # ----------------------------------- Goal subscribers
+        from rlb_controller.robot_parameters import goals_topic
+
         self.goal_subscription = self.node.create_subscription(
             msg_type=Goal,
-            topic="/goals_backlog",
+            topic=goals_topic,
             # topic="/sim_node_publisher/rlb/targets",
             callback=self.goal_subscriber_callback,
             qos_profile=qos
@@ -178,7 +181,7 @@ class RLB_viz_gui():
 
     # ---------------------------------- Subscribers
     def team_msg_subscriber_callback(self, msg):
-        if msg.robot_id not in self.team_members.keys():
+        if msg.robot_id not in self.team_members.keys() and self.ui.auto_add_robots.isChecked():
             self.add_robot(msg=msg)
 
         if msg.type == "Goal_annoucement":
