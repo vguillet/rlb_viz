@@ -1,7 +1,47 @@
 
 
-class Room_view:       
-    def plot_robot(self):
+##################################################################################################################
+"""
+"""
+
+# Built-in/Generic Imports
+import math
+
+# Libs
+import math
+import matplotlib.patches as mpatches
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+from PyQt5.QtCore import *
+
+# Own modules
+from .Blit_manager import BlitManager
+
+# from rlb_controller.robot_parameters import *
+
+##################################################################################################################
+
+
+
+class Room_view:
+    def __init__(self) -> None:
+        # -> Create canvas widgets
+        self.room_plot = MplCanvas(self,
+                                   width=2,
+                                   height=2,
+                                   dpi=100)
+
+        # -> Create blit managers
+        self.room_bm = BlitManager(canvas=self.room_plot.fig.canvas)
+
+        # -> Add plots to views
+        self.ui.main_layout_room.addWidget(self.room_plot)
+
+        # -> Create canvas tools widget
+        toolbar = NavigationToolbar(self.room_plot, self.ui)
+        self.ui.main_layout_room.addWidget(toolbar)
+               
+    def room_plot_robots(self):
         for robot_id in self.team_members.keys():
             x = round(self.team_members[robot_id]["pose"]["x"], 3)
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
@@ -141,11 +181,32 @@ class Room_view:
 
         # -> Blit updated artists
         self.room_bm.update()
-        self.sim_map_bm.update()
-        self.sim_paths_bm.update()
-        self.sim_comms_bm.update()
 
-    def add_robot(self, robot_dict: dict, msg):
+    def room_remove_robot(self, robot_id):
+        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+
+        try:
+            # -> Remove artists from blit manager
+            self.room_bm.remove_artist(self.team_members[robot_id]["room_pose_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["goal_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["goal_ray_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["label_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["lazer_scan_point_cloud"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["coordinated_collision_ray_artist"])
+
+            for cone_ref in vision_cones.keys():
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
+                
+            for cone_ref in side_vision_cones.keys():
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["l_vision_cone_artist"])
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["r_vision_cone_artist"])
+
+        except:
+            pass
+
+    def room_add_robot(self, msg):
         from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
         (room_pose_artist,) = self.room_plot.axes.plot([], [], 'bo')
@@ -154,55 +215,40 @@ class Room_view:
         (lazer_scan_point_cloud_artist, ) = self.room_plot.axes.plot([], [], '.', markersize=1, color="black")
         (coordinated_collision_ray_artist, ) = self.room_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
 
-        self.team_members[msg.robot_id] = {
-            # ---------------------------------------- Base setup
-            "label_artist": self.room_plot.axes.annotate(
-                xy=(0,0),
-                xytext=(1, 1),
-                text=msg.robot_id
-                ),   
-            "state": None,
+        # ---------------------------------------- Base setup
+        self.team_members[msg.robot_id]["label_artist"] = self.room_plot.axes.annotate(
+            xy=(0,0),
+            xytext=(1, 1),
+            text=msg.robot_id
+            )
 
-            # ---------------------------------------- Pose setup
-            "pose_subscriber": None,
-            "pose": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "u": 0,
-                "v": 0,
-                "w": 0
-                },
-            "room_pose_artist": room_pose_artist,
+        # ---------------------------------------- Pose setup
+        self.team_members[msg.robot_id]["room_pose_artist"] = room_pose_artist
 
-            # ---------------------------------------- Goal setup
-            "goal": {
-                "id": "",
-                "x": [],
-                "y": []
-                },
-            "goal_artist": goal_artist,
-            "goal_ray_artist": goal_ray_artist,      
+        # ---------------------------------------- Goal setup
+        self.team_members[msg.robot_id]["goal_artist"] = goal_artist
+        self.team_members[msg.robot_id]["goal_ray_artist"] = goal_ray_artist  
 
-            # ---------------------------------------- Lazer scan setup
-            "lazer_scan_point_cloud": lazer_scan_point_cloud_artist,
-            "scan_circle_artist": mpatches.Circle(
-                (0, 0),
-                self.ui.lazer_scan_slider.value()/10,
-                fill=False,
-                linestyle="--",
-                linewidth=0.1
-                ),
-            "collision_circle_artist": mpatches.Circle(
-                (0, 0),
-                0.10,
-                fill=False,
-                color="black",
-                linewidth=1
-                ),
-            # ---------------------------------------- Coordinated collision setup
-            "coordinated_collision_ray_artist": coordinated_collision_ray_artist,
-        }
+        # ---------------------------------------- Lazer scan setup
+        self.team_members[msg.robot_id]["lazer_scan_point_cloud"] = lazer_scan_point_cloud_artist
+        self.team_members[msg.robot_id]["scan_circle_artist"] = mpatches.Circle(
+            (0, 0),
+            self.ui.lazer_scan_slider.value()/10,
+            fill=False,
+            linestyle="--",
+            linewidth=0.1
+            )
+
+        self.team_members[msg.robot_id]["collision_circle_artist"] = mpatches.Circle(
+            (0, 0),
+            0.10,
+            fill=False,
+            color="black",
+            linewidth=1
+            )
+        # ---------------------------------------- Coordinated collision setup
+        self.team_members[msg.robot_id]["coordinated_collision_ray_artist"] = coordinated_collision_ray_artist
+        
 
         # -> Add patches to axes
         self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
@@ -271,3 +317,47 @@ class Room_view:
             # -> Add artist to blit
             self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
             self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parents, width=5, height=4, dpi=100):
+        self.axes = None
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.built_canvas()
+        super(MplCanvas, self).__init__(self.fig)
+
+        self.setFocusPolicy(Qt.ClickFocus)
+        self.setFocus()
+
+    def built_canvas(self):
+
+
+        x_min = -3
+        x_max = 3
+
+        y_min = -3
+        y_max = 3
+
+        self.axes = self.fig.add_subplot(111)
+        # self.axes.axis("off")
+        self.axes.set_xlim(x_min, x_max)
+        self.axes.set_ylim(y_min, y_max)
+
+        # -> Move left y-axis and bottim x-axis to centre, passing through (0,0)
+        self.axes.spines['left'].set_position('center')
+        self.axes.spines['bottom'].set_position('center')
+
+        # -> Eliminate upper and right axes
+        self.axes.spines['right'].set_color('none')
+        self.axes.spines['top'].set_color('none')
+
+        # -> Invert axis
+        self.axes.invert_xaxis()
+        self.axes.invert_yaxis()
+
+        self.fig.tight_layout(pad=0)
+
+        self.axes.grid()
+
+        # -> Set aspect ratio to 1
+        ratio = 1.0
+        self.axes.set_aspect(abs((x_min-x_max)/(y_min-y_max))*ratio)
