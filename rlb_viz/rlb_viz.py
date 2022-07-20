@@ -29,14 +29,14 @@ import math
 
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
-
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
-
 from matplotlib.figure import Figure
+import matplotlib.image as image
 
 from functools import partial
 
 # Own modules
+# from rlb_coordinator.Caylus_map_loader import load_maps
 from .UI_singletons import Ui_singleton
 from .Member_overview_widget import Member_overview_widget
 from .Blit_manager import BlitManager
@@ -61,11 +61,59 @@ class RLB_viz_gui():
         self.ui.add_robot.clicked.connect(self.__manual_add_robot)
 
         # ==================================================== Create visualiser
-        # -> Create canvas widget
-        self.sc = MplCanvas(self,
-                            width=2,
-                            height=2,
-                            dpi=100)
+        # -> Load maps
+        from rlb_controller.simulation_parameters import sim_map_image_path
+        map_img = image.imread(sim_map_image_path)
+
+        # grids_lst = load_maps(
+        #     hard_obstacles=True,
+        #     dense_vegetation=True,
+        #     light_vegetation=True,
+        #     paths=True
+        # )
+
+        # -> Create canvas widgets
+        # ----- Room
+        self.room_plot = MplCanvas(self,
+                                   width=2,
+                                   height=2,
+                                   dpi=100)
+
+        # ----- Map
+        self.sim_map_plot = MplCanvas(self,
+                                      width=2,
+                                      height=2,
+                                      dpi=100)
+
+        # -> Add map to plot
+        aspect_ratio = map_img.shape[1]/map_img.shape[0]
+
+        if aspect_ratio < 1:
+            self.sim_map_plot.axes.imshow(
+                map_img,
+                extent=(-3*aspect_ratio, 3*aspect_ratio, -3, 3)
+                )
+
+            self.sim_map_plot.axes.set_xlim(-3*aspect_ratio, 3*aspect_ratio)
+        
+        else:
+            self.sim_map_plot.axes.imshow(
+                map_img,
+                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
+                )
+
+            self.sim_map_plot.axes.set_ylim(-3*aspect_ratio, 3*aspect_ratio) 
+
+        # ----- Paths
+        self.sim_paths_plot = MplCanvas(self,
+                                        width=2,
+                                        height=2,
+                                        dpi=100)
+        # ----- Comms
+        self.sim_comms_plot = MplCanvas(self,
+                                        width=2,
+                                        height=2,
+                                        dpi=100)
 
         # # -> Load map
         # path = str(os.getcwd()) + "/ros2_ws/src/rlb_viz/rlb_viz/Graphs/data.json"
@@ -84,11 +132,30 @@ class RLB_viz_gui():
         # subax2 = plt.subplot(122)
         # nx.draw_shell(G, nlist=[range(5, 10), range(5)], with_labels=True, font_weight='bold')
 
-        # -> Create blit manager
-        self.bm = BlitManager(canvas=self.sc.fig.canvas)
+        # -> Create blit managers
+        self.room_bm = BlitManager(canvas=self.room_plot.fig.canvas)
+        self.sim_map_bm = BlitManager(canvas=self.sim_map_plot.fig.canvas)
+        self.sim_paths_bm = BlitManager(canvas=self.sim_paths_plot.fig.canvas)
+        self.sim_comms_bm = BlitManager(canvas=self.sim_comms_plot.fig.canvas)
 
-        # -> Add plot view
-        self.ui.main_layout.addWidget(self.sc)
+        # -> Add plots to views
+        self.ui.main_layout_room.addWidget(self.room_plot)
+        self.ui.main_layout_simulation_map.addWidget(self.sim_map_plot)
+        self.ui.main_layout_simulation_paths.addWidget(self.sim_paths_plot)
+        self.ui.main_layout_simulation_comm.addWidget(self.sim_comms_plot)
+
+        # -> Create canvas tools widget
+        toolbar = NavigationToolbar(self.room_plot, self.ui)
+        self.ui.main_layout_room.addWidget(toolbar)
+
+        toolbar = NavigationToolbar(self.sim_map_plot, self.ui)
+        self.ui.main_layout_simulation_map.addWidget(toolbar)
+
+        toolbar = NavigationToolbar(self.sim_paths_plot, self.ui)
+        self.ui.main_layout_simulation_paths.addWidget(toolbar)
+
+        toolbar = NavigationToolbar(self.sim_comms_plot, self.ui)
+        self.ui.main_layout_simulation_comm.addWidget(toolbar)
 
         # -> Display windows
         self.ui.show()
@@ -99,10 +166,6 @@ class RLB_viz_gui():
         self.plot_timer.setInterval(10)
         self.plot_timer.start()
         
-        # -> Create canvas tools widget
-        toolbar = NavigationToolbar(self.sc, self.ui)
-        self.ui.main_layout.addWidget(toolbar)
-
         # ==================================================== Create Node
         self.node = Node("RLB_viz")
 
@@ -119,22 +182,28 @@ class RLB_viz_gui():
 
 
         # ==================================================== Create subscribers
+        # ----------------------------------- Team communications publisher
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
+            )
+
+        self.team_comms_publisher = self.node.create_publisher(
+            msg_type=TeamComm,
+            topic="/Team_comms",
+            qos_profile=qos
+            )
+
         # ----------------------------------- Team communications subscriber
-        qos = QoSProfile(depth=10)
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
+            )
 
         self.team_comms_subscriber = self.node.create_subscription(
             msg_type=TeamComm,
             topic="/Team_comms",
             callback=self.team_msg_subscriber_callback,
-            qos_profile=qos
-            )
-
-        # ----------------------------------- Team communications publisher
-        qos = QoSProfile(depth=10)
-
-        self.team_comms_publisher = self.node.create_publisher(
-            msg_type=TeamComm,
-            topic="/Team_comms",
             qos_profile=qos
             )
         
@@ -145,6 +214,8 @@ class RLB_viz_gui():
 
         # ----------------------------------- Goal subscribers
         from rlb_controller.robot_parameters import goals_topic
+
+        qos = QoSProfile(depth=10)
 
         self.goal_subscription = self.node.create_subscription(
             msg_type=Goal,
@@ -362,8 +433,17 @@ class RLB_viz_gui():
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
             # -> Update pose
-            self.team_members[robot_id]["pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["pose_artist"].set_ydata(y)
+            self.team_members[robot_id]["room_pose_artist"].set_xdata(x)
+            self.team_members[robot_id]["room_pose_artist"].set_ydata(y)
+
+            self.team_members[robot_id]["sim_map_pose_artist"].set_xdata(x)
+            self.team_members[robot_id]["sim_map_pose_artist"].set_ydata(y)
+
+            self.team_members[robot_id]["sim_paths_pose_artist"].set_xdata(x)
+            self.team_members[robot_id]["sim_paths_pose_artist"].set_ydata(y)
+
+            self.team_members[robot_id]["sim_comms_pose_artist"].set_xdata(x)
+            self.team_members[robot_id]["sim_comms_pose_artist"].set_ydata(y)
 
             # -------------------------- Update goal
             if self.ui.goals_view_toggle.isChecked():
@@ -476,11 +556,29 @@ class RLB_viz_gui():
                     self.team_members[robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
                     self.team_members[robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
             
+            # -------------------------- Update other collision artists
             # -> Update collision circle position
             self.team_members[robot_id]["collision_circle_artist"].center = x, y
 
+            # -> Update coordinated collision ray
+            from rlb_controller.robot_parameters import collsion_ray_length
+
+            if self.team_members[robot_id]["pose"]["w"] < 0:
+                w = 360 + self.team_members[robot_id]["pose"]["w"]
+            else:
+                w = self.team_members[robot_id]["pose"]["w"]
+
+            x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+
+            self.team_members[robot_id]["coordinated_collision_ray_artist"].set_xdata([x, x + x_end])
+            self.team_members[robot_id]["coordinated_collision_ray_artist"].set_ydata([y, y + y_end])
+
         # -> Blit updated artists
-        self.bm.update()
+        self.room_bm.update()
+        self.sim_map_bm.update()
+        self.sim_paths_bm.update()
+        self.sim_comms_bm.update()
 
     def remove_robot(self, robot_id):
         from rlb_controller.robot_parameters import vision_cones, side_vision_cones
@@ -491,20 +589,21 @@ class RLB_viz_gui():
             self.node.destroy_subscription(self.team_members[robot_id]["lazer_scan_subscriber"])
 
             # -> Remove artists from blit manager
-            self.bm.remove_artist(self.team_members[robot_id]["pose_artist"])
-            self.bm.remove_artist(self.team_members[robot_id]["goal_artist"])
-            self.bm.remove_artist(self.team_members[robot_id]["goal_ray_artist"])
-            self.bm.remove_artist(self.team_members[robot_id]["label_artist"])
-            self.bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
-            self.bm.remove_artist(self.team_members[robot_id]["lazer_scan_point_cloud"])
-            self.bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["room_pose_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["goal_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["goal_ray_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["label_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["lazer_scan_point_cloud"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["coordinated_collision_ray_artist"])
 
             for cone_ref in vision_cones.keys():
-                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
                 
             for cone_ref in side_vision_cones.keys():
-                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["l_vision_cone_artist"])
-                self.bm.remove_artist(self.team_members[robot_id][cone_ref]["r_vision_cone_artist"])
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["l_vision_cone_artist"])
+                self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["r_vision_cone_artist"])
 
             # -> Remove widget
             for i in reversed(range(self.ui.fleet_overview_layout.count())): 
@@ -522,19 +621,25 @@ class RLB_viz_gui():
         from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
         # -> Create entry in team members dictionary
-        (pose_artist,) = self.sc.axes.plot([], [], 'bo')
-        (goal_artist,) = self.sc.axes.plot([], [], '-o', linewidth=0.1)
-        (goal_ray_artist,) = self.sc.axes.plot([0, 0], [0, 0], linestyle='dashed', linewidth=1., color='blue')
-        (lazer_scan_point_cloud_artist, ) = self.sc.axes.plot([], [], '.', markersize=1, color="black")
-        
+        (room_pose_artist,) = self.room_plot.axes.plot([], [], 'bo')
+        (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'bo')
+        (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'bo')
+        (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'bo')
+
+        (goal_artist,) = self.room_plot.axes.plot([], [], '-o', linewidth=0.1)
+        (goal_ray_artist,) = self.room_plot.axes.plot([0, 0], [0, 0], linestyle='dashed', linewidth=1., color='blue')
+        (lazer_scan_point_cloud_artist, ) = self.room_plot.axes.plot([], [], '.', markersize=1, color="black")
+        (coordinated_collision_ray_artist, ) =self.room_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+
         self.team_members[msg.robot_id] = {
             # ---------------------------------------- Base setup
             "overview_widget": Member_overview_widget(),
-            "label_artist": self.sc.axes.annotate(
+            "label_artist": self.room_plot.axes.annotate(
                 xy=(0,0),
                 xytext=(1, 1),
-                s=msg.robot_id
+                text=msg.robot_id
                 ),   
+            "state": None,
 
             # ---------------------------------------- Pose setup
             "pose_subscriber": None,
@@ -546,7 +651,10 @@ class RLB_viz_gui():
                 "v": 0,
                 "w": 0
                 },
-            "pose_artist": pose_artist,
+            "room_pose_artist": room_pose_artist,
+            "sim_map_pose_artist": sim_map_pose_artist,
+            "sim_paths_pose_artist": sim_paths_pose_artist,
+            "sim_comms_pose_artist": sim_comms_pose_artist,
 
             # ---------------------------------------- Goal setup
             "goal": {
@@ -575,21 +683,25 @@ class RLB_viz_gui():
                 color="black",
                 linewidth=1
                 ),
+            # ---------------------------------------- Coordinated collision setup
+            "coordinated_collision_ray_artist": coordinated_collision_ray_artist,
         }
 
         # -> Add patches to axes
-        self.sc.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.sc.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
+        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
 
-        # -> Add artist to blit
-        self.bm.add_artist(pose_artist)
-        self.bm.add_artist(goal_artist)
-        self.bm.add_artist(goal_ray_artist)
-        self.bm.add_artist(lazer_scan_point_cloud_artist)
+        # -> Add artists to blit
+        # Room
+        self.room_bm.add_artist(room_pose_artist)
+        self.room_bm.add_artist(goal_artist)
+        self.room_bm.add_artist(goal_ray_artist)
+        self.room_bm.add_artist(lazer_scan_point_cloud_artist)
+        self.room_bm.add_artist(coordinated_collision_ray_artist)
 
-        self.bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        self.bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
 
         # -> Add a patch for every vision cone
         for cone_ref, cone_properties in vision_cones.items():
@@ -606,10 +718,10 @@ class RLB_viz_gui():
             }
 
             # -> Add artist to plot
-            self.sc.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
 
             # -> Add artist to blit
-            self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
 
         for cone_ref, cone_properties in side_vision_cones.items():
             self.team_members[msg.robot_id][cone_ref] = {
@@ -636,12 +748,27 @@ class RLB_viz_gui():
             self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
 
             # -> Add artist to plot
-            self.sc.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
-            self.sc.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
 
             # -> Add artist to blit
-            self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
-            self.bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+
+        # Map
+        self.sim_map_bm.add_artist(sim_map_pose_artist)
+        # self.sim_map_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
+        # self.sim_map_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+
+        # Paths
+        self.sim_paths_bm.add_artist(sim_paths_pose_artist)
+        # self.sim_paths_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
+        # self.sim_paths_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+
+        # Comms
+        self.sim_comms_bm.add_artist(sim_comms_pose_artist)
+        # self.sim_comms_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
+        # self.sim_comms_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
 
         # -> Update member widget
         self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setText(msg.robot_id)
@@ -653,7 +780,7 @@ class RLB_viz_gui():
         self.team_members[msg.robot_id]["overview_widget"].ui.remove_robot.clicked.connect(partial(self.remove_robot, msg.robot_id))
 
         # -> Add member overview widget to main ui
-        self.ui.fleet_overview_layout.addWidget(self.team_members[msg.robot_id]["overview_widget"].ui)
+        self.ui.fleet_overview_layout_room.addWidget(self.team_members[msg.robot_id]["overview_widget"].ui)
 
         # -> Create pose subscribers
         qos = QoSProfile(
