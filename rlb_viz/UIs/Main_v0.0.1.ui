@@ -309,7 +309,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QVBoxLayout" name="main_layout_simulation_map"/>
+             <layout class="QVBoxLayout" name="main_layout_sim_map"/>
             </item>
            </layout>
           </widget>
@@ -351,7 +351,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QVBoxLayout" name="main_layout_simulation_paths"/>
+             <layout class="QVBoxLayout" name="main_layout_sim_paths"/>
             </item>
            </layout>
           </widget>
@@ -440,7 +440,7 @@
              </layout>
             </item>
             <item>
-             <layout class="QVBoxLayout" name="main_layout_simulation_comm"/>
+             <layout class="QVBoxLayout" name="main_layout_sim_comms"/>
             </item>
            </layout>
           </widget>
@@ -568,7 +568,7 @@
               <x>0</x>
               <y>0</y>
               <width>368</width>
-              <height>307</height>
+              <height>339</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_12">
@@ -664,7 +664,7 @@
               <x>0</x>
               <y>0</y>
               <width>382</width>
-              <height>102</height>
+              <height>70</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_7">
@@ -717,7 +717,7 @@
               <x>0</x>
               <y>0</y>
               <width>382</width>
-              <height>102</height>
+              <height>70</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_8">

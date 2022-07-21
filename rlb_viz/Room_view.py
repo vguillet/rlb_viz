@@ -329,8 +329,6 @@ class MplCanvas(FigureCanvasQTAgg):
         self.setFocus()
 
     def built_canvas(self):
-
-
         x_min = -3
         x_max = 3
 

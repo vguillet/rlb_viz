@@ -31,13 +31,16 @@ import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-import matplotlib.image as image
+
 
 from functools import partial
 
 # Own modules
 from .Room_view import Room_view
 from .Room_energy_surface_view import Room_energy_surface_view
+from .Sim_map_view import Sim_map_view
+from .Sim_comms_view import Sim_comms_view
+from .Sim_paths_view import Sim_paths_view
 
 # from rlb_coordinator.Caylus_map_loader import load_maps
 from .UI_singletons import Ui_singleton
@@ -54,7 +57,10 @@ import networkx as nx
 
 class RLB_viz_gui(
     Room_view,
-    Room_energy_surface_view
+    Room_energy_surface_view,
+    Sim_map_view,
+    Sim_comms_view,
+    Sim_paths_view
     ):
     def __init__(self):
         # ==================================================== Load GUI
@@ -67,90 +73,12 @@ class RLB_viz_gui(
         self.ui.add_robot.clicked.connect(self.__manual_add_robot)
 
         # ==================================================== Create visualiser
-        # -> Load maps
-        from rlb_controller.simulation_parameters import sim_map_image_path
-        map_img = image.imread(sim_map_image_path)
-
         # grids_lst = load_maps(
         #     hard_obstacles=True,
         #     dense_vegetation=True,
         #     light_vegetation=True,
         #     paths=True
         # )
-
-        # -> Create canvas widgets
-        # ----- Map
-        self.sim_map_plot = MplCanvas(self,
-                                      width=2,
-                                      height=2,
-                                      dpi=100)
-
-        # -> Add map to plot
-        aspect_ratio = map_img.shape[1]/map_img.shape[0]
-
-        if aspect_ratio < 1:
-            self.sim_map_plot.axes.imshow(
-                map_img,
-                extent=(-3*aspect_ratio, 3*aspect_ratio, -3, 3)
-                )
-
-            self.sim_map_plot.axes.set_xlim(3*aspect_ratio, -3*aspect_ratio)
-        
-        else:
-            self.sim_map_plot.axes.imshow(
-                map_img,
-                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
-                )
-
-            self.sim_map_plot.axes.set_ylim(3*aspect_ratio, -3*aspect_ratio) 
-
-        # ----- Paths
-        self.sim_paths_plot = MplCanvas(self,
-                                        width=2,
-                                        height=2,
-                                        dpi=100)
-        # ----- Comms
-        self.sim_comms_plot = MplCanvas(self,
-                                        width=2,
-                                        height=2,
-                                        dpi=100)
-
-        # # -> Load map
-        # path = str(os.getcwd()) + "/ros2_ws/src/rlb_viz/rlb_viz/Graphs/data.json"
-        # f = open (path, "r")
-        # data = json.loads(f.read())
-
-        # G = nx.Graph([("A", "B")])
-        # data = json_graph.node_link_data(G)
-
-        # self.map = json_graph.node_link_graph(data)
-
-        # print(self.map)
-
-        # subax1 = plt.subplot(121)
-        # nx.draw(G, with_labels=True, font_weight='bold')
-        # subax2 = plt.subplot(122)
-        # nx.draw_shell(G, nlist=[range(5, 10), range(5)], with_labels=True, font_weight='bold')
-
-        # -> Create blit managers
-        self.sim_map_bm = BlitManager(canvas=self.sim_map_plot.fig.canvas)
-        self.sim_paths_bm = BlitManager(canvas=self.sim_paths_plot.fig.canvas)
-        self.sim_comms_bm = BlitManager(canvas=self.sim_comms_plot.fig.canvas)
-
-        # -> Add plots to views
-        self.ui.main_layout_simulation_map.addWidget(self.sim_map_plot)
-        self.ui.main_layout_simulation_paths.addWidget(self.sim_paths_plot)
-        self.ui.main_layout_simulation_comm.addWidget(self.sim_comms_plot)
-
-        # -> Create canvas tools widget
-        toolbar = NavigationToolbar(self.sim_map_plot, self.ui)
-        self.ui.main_layout_simulation_map.addWidget(toolbar)
-
-        toolbar = NavigationToolbar(self.sim_paths_plot, self.ui)
-        self.ui.main_layout_simulation_paths.addWidget(toolbar)
-
-        toolbar = NavigationToolbar(self.sim_comms_plot, self.ui)
-        self.ui.main_layout_simulation_comm.addWidget(toolbar)
 
         # -> Create plotter timer
         self.plot_timer = QtCore.QTimer()
@@ -218,6 +146,9 @@ class RLB_viz_gui(
         # -> Load IHM modules
         Room_view.__init__(self)
         Room_energy_surface_view.__init__(self)
+        Sim_map_view.__init__(self)
+        Sim_comms_view.__init__(self)
+        Sim_paths_view.__init__(self)
 
         # -> To remove
         self.placeholder_callback()
@@ -428,36 +359,22 @@ class RLB_viz_gui(
         # -> Plot views
         self.room_plot_robots()
         self.room_energy_surface_plot_robots()
-
-        for robot_id in self.team_members.keys():
-            x = round(self.team_members[robot_id]["pose"]["x"], 3)
-            y = round(self.team_members[robot_id]["pose"]["y"], 3)
-
-            # -> Update pose
-            self.team_members[robot_id]["sim_map_pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["sim_map_pose_artist"].set_ydata(y)
-
-            self.team_members[robot_id]["sim_paths_pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["sim_paths_pose_artist"].set_ydata(y)
-
-            self.team_members[robot_id]["sim_comms_pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["sim_comms_pose_artist"].set_ydata(y)
-
-        # -> Blit updated artists
-        self.sim_paths_bm.update()
-        self.sim_comms_bm.update()
+        self.sim_map_plot_robots()
+        self.sim_comms_plot_robots()
+        self.sim_paths_plot_robots()
 
     def remove_robot(self, robot_id):
         self.room_remove_robot(robot_id=robot_id)
         self.room_energy_surface_remove_robot(robot_id=robot_id)
+        self.sim_map_add_robot(robot_id=robot_id)
+        self.sim_comms_add_robot(robot_id=robot_id)
+        self.sim_paths_add_robot(robot_id=robot_id)
 
         try:
             # -> Delete subscribers
             self.node.destroy_subscription(self.team_members[robot_id]["pose_subscriber"])
             self.node.destroy_subscription(self.team_members[robot_id]["lazer_scan_subscriber"])
 
-            # -> Remove artists from blit manager
-            
             # -> Remove widget
             for i in reversed(range(self.ui.fleet_overview_layout.count())): 
                 if self.ui.fleet_overview_layout.itemAt(i).widget().robot_name.text() == robot_id:
@@ -471,13 +388,6 @@ class RLB_viz_gui(
             pass
 
     def add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
-
-        # -> Create entry in team members dictionary
-        (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'bo')
-        (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'bo')
-        (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'bo')
-
         self.team_members[msg.robot_id] = {
             # ---------------------------------------- Base setup
             "overview_widget": Member_overview_widget(), 
@@ -494,10 +404,6 @@ class RLB_viz_gui(
                 "w": 0
                 },
                 
-            "sim_map_pose_artist": sim_map_pose_artist,
-            "sim_paths_pose_artist": sim_paths_pose_artist,
-            "sim_comms_pose_artist": sim_comms_pose_artist,
-
             # ---------------------------------------- Goal setup
             "goal": {
                 "id": "",
@@ -513,21 +419,9 @@ class RLB_viz_gui(
         # -> Run modules add robot
         self.room_add_robot(msg = msg)
         self.room_energy_surface_add_robot(msg = msg)
-
-        # Map
-        self.sim_map_bm.add_artist(sim_map_pose_artist)
-        # self.sim_map_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        # self.sim_map_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
-
-        # Paths
-        self.sim_paths_bm.add_artist(sim_paths_pose_artist)
-        # self.sim_paths_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        # self.sim_paths_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
-
-        # Comms
-        self.sim_comms_bm.add_artist(sim_comms_pose_artist)
-        # self.sim_comms_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        # self.sim_comms_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+        self.sim_map_add_robot(msg=msg)
+        self.sim_comms_add_robot(msg=msg)
+        self.sim_paths_add_robot(msg=msg)
 
         # -> Update member widget
         self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setText(msg.robot_id)
@@ -606,8 +500,6 @@ class MplCanvas(FigureCanvasQTAgg):
         self.setFocus()
 
     def built_canvas(self):
-
-
         x_min = -3
         x_max = 3
 
