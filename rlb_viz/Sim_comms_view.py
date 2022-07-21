@@ -17,8 +17,10 @@ import numpy as np
 
 # Own modules
 from .Blit_manager import BlitManager
+from rlb_coordinator.Caylus_map_loader import load_maps
 
 # from rlb_controller.robot_parameters import *
+from rlb_controller.simulation_parameters import *
 
 ##################################################################################################################
 
@@ -31,6 +33,40 @@ class Sim_comms_view:
                                    width=2,
                                    height=2,
                                    dpi=100)
+
+        # -> Load obstacle_grids
+        obstacle_grids = load_maps(
+            hard_obstacles=True,
+            dense_vegetation=True,
+            light_vegetation=True,
+            paths=False
+        )
+
+        # -> Generate signal blocking probability grid
+        signal_blocking_prob_grid = \
+                obstacle_grids["hard_obstacles"] * hard_obstacles_signal_blocking_prob \
+                + obstacle_grids["dense_vegetation"] * dense_vegetation_signal_blocking_prob \
+                + obstacle_grids["light_vegetation"] * light_vegetation_signal_blocking_prob
+
+        # -> Add map to plot
+        aspect_ratio = signal_blocking_prob_grid.shape[1]/signal_blocking_prob_grid.shape[0]
+
+        if aspect_ratio < 1:
+            self.sim_comms_plot.axes.imshow(
+                signal_blocking_prob_grid,
+                extent=(-3*aspect_ratio, 3*aspect_ratio, -3, 3),
+                cmap='plasma'
+                )
+
+            self.sim_comms_plot.axes.set_xlim(3*aspect_ratio, -3*aspect_ratio)
+        
+        else:
+            self.sim_comms_plot.axes.imshow(
+                signal_blocking_prob_grid,
+                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
+                )
+
+            self.sim_comms_plot.axes.set_ylim(3*aspect_ratio, -3*aspect_ratio) 
 
         # -> Create blit managers
         self.sim_comms_bm = BlitManager(canvas=self.sim_comms_plot.fig.canvas)
@@ -47,6 +83,20 @@ class Sim_comms_view:
             x = round(self.team_members[robot_id]["pose"]["x"], 3)
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
+            # -> Update coordinated collision ray
+            from rlb_controller.robot_parameters import collsion_ray_length
+
+            if self.team_members[robot_id]["pose"]["w"] < 0:
+                w = 360 + self.team_members[robot_id]["pose"]["w"]
+            else:
+                w = self.team_members[robot_id]["pose"]["w"]
+
+            x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+
+            self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_xdata([x, x + x_end])
+            self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_ydata([y, y + y_end])
+
             # -> Update pose
             self.team_members[robot_id]["sim_comms_pose_artist"].set_xdata(x)
             self.team_members[robot_id]["sim_comms_pose_artist"].set_ydata(y)
@@ -58,18 +108,22 @@ class Sim_comms_view:
         try:
             # -> Remove artists from blit manager
             self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_pose_artist"])
+            self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_direction_pointer_artist"])
 
         except:
             pass
 
     def sim_comms_add_robot(self, msg):
-        (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'bo')
+        (sim_comms_direction_pointer_artist, ) = self.sim_comms_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'co')
 
         # ---------------------------------------- Pose setup
+        self.team_members[msg.robot_id]["sim_comms_direction_pointer_artist"] = sim_comms_direction_pointer_artist
         self.team_members[msg.robot_id]["sim_comms_pose_artist"] = sim_comms_pose_artist
 
         # -> Add artists to blit
         self.sim_comms_bm.add_artist(sim_comms_pose_artist)
+        self.sim_comms_bm.add_artist(sim_comms_direction_pointer_artist)
 
 
 class MplCanvas(FigureCanvasQTAgg):

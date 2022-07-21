@@ -16,6 +16,7 @@ from PyQt5.QtCore import *
 import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel
+from PyQt5.QtGui import QIcon
 
 import sys
 import rclpy
@@ -68,18 +69,15 @@ class RLB_viz_gui(
 
         # -> Load gui singleton
         self.ui = Ui_singleton().interface
-        
+
+        root_path = str(os.getcwd())
+        self.ui.setWindowIcon(QIcon(root_path + "/ros2_ws/src/rlb_viz/rlb_viz/Data/Turtlebot3_logo.png"))
+        self.ui.setWindowTitle("rlb viz")
+
         # -> Connect buttons
         self.ui.add_robot.clicked.connect(self.__manual_add_robot)
 
         # ==================================================== Create visualiser
-        # grids_lst = load_maps(
-        #     hard_obstacles=True,
-        #     dense_vegetation=True,
-        #     light_vegetation=True,
-        #     paths=True
-        # )
-
         # -> Create plotter timer
         self.plot_timer = QtCore.QTimer()
         self.plot_timer.timeout.connect(self.plot_robots)
@@ -358,7 +356,7 @@ class RLB_viz_gui(
     def plot_robots(self):
         # -> Plot views
         self.room_plot_robots()
-        self.room_energy_surface_plot_robots()
+        # self.room_energy_surface_plot_robots()
         self.sim_map_plot_robots()
         self.sim_comms_plot_robots()
         self.sim_paths_plot_robots()
@@ -366,9 +364,9 @@ class RLB_viz_gui(
     def remove_robot(self, robot_id):
         self.room_remove_robot(robot_id=robot_id)
         self.room_energy_surface_remove_robot(robot_id=robot_id)
-        self.sim_map_add_robot(robot_id=robot_id)
-        self.sim_comms_add_robot(robot_id=robot_id)
-        self.sim_paths_add_robot(robot_id=robot_id)
+        self.sim_map_remove_robot(robot_id=robot_id)
+        self.sim_comms_remove_robot(robot_id=robot_id)
+        self.sim_paths_remove_robot(robot_id=robot_id)
 
         try:
             # -> Delete subscribers
@@ -376,9 +374,9 @@ class RLB_viz_gui(
             self.node.destroy_subscription(self.team_members[robot_id]["lazer_scan_subscriber"])
 
             # -> Remove widget
-            for i in reversed(range(self.ui.fleet_overview_layout.count())): 
-                if self.ui.fleet_overview_layout.itemAt(i).widget().robot_name.text() == robot_id:
-                    self.ui.fleet_overview_layout.itemAt(i).widget().deleteLater()
+            for i in reversed(range(self.ui.fleet_overview_layout_room.count())): 
+                if self.ui.fleet_overview_layout_room.itemAt(i).widget().robot_name.text() == robot_id:
+                    self.ui.fleet_overview_layout_room.itemAt(i).widget().deleteLater()
                     break
 
             # -> Delete member entry

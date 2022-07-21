@@ -72,6 +72,20 @@ class Sim_map_view:
             x = round(self.team_members[robot_id]["pose"]["x"], 3)
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
+            # -> Update coordinated collision ray
+            from rlb_controller.robot_parameters import collsion_ray_length
+
+            if self.team_members[robot_id]["pose"]["w"] < 0:
+                w = 360 + self.team_members[robot_id]["pose"]["w"]
+            else:
+                w = self.team_members[robot_id]["pose"]["w"]
+
+            x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+
+            self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_xdata([x, x + x_end])
+            self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_ydata([y, y + y_end])
+
             # -> Update pose
             self.team_members[robot_id]["sim_map_pose_artist"].set_xdata(x)
             self.team_members[robot_id]["sim_map_pose_artist"].set_ydata(y)
@@ -83,18 +97,22 @@ class Sim_map_view:
         try:
             # -> Remove artists from blit manager
             self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_pose_artist"])
+            self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_direction_pointer_artist"])
 
         except:
             pass
 
     def sim_map_add_robot(self, msg):
-        (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'bo')
+        (sim_map_direction_pointer_artist, ) = self.sim_map_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'co')
 
         # ---------------------------------------- Pose setup
+        self.team_members[msg.robot_id]["sim_map_direction_pointer_artist"] = sim_map_direction_pointer_artist
         self.team_members[msg.robot_id]["sim_map_pose_artist"] = sim_map_pose_artist
 
         # -> Add artists to blit
         self.sim_map_bm.add_artist(sim_map_pose_artist)
+        self.sim_map_bm.add_artist(sim_map_direction_pointer_artist)
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parents, width=5, height=4, dpi=100):

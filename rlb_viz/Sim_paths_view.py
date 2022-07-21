@@ -17,11 +17,9 @@ import numpy as np
 
 # Own modules
 from .Blit_manager import BlitManager
-
-# from rlb_controller.robot_parameters import *
+from rlb_coordinator.Caylus_map_loader import load_maps
 
 ##################################################################################################################
-
 
 
 class Sim_paths_view:
@@ -31,6 +29,34 @@ class Sim_paths_view:
                                    width=2,
                                    height=2,
                                    dpi=100)
+
+        # -> Load path grid
+        map_img = load_maps(
+            hard_obstacles=False,
+            dense_vegetation=False,
+            light_vegetation=False,
+            paths=True
+        )["paths"]
+
+        # -> Add map to plot
+        aspect_ratio = map_img.shape[1]/map_img.shape[0]
+
+        if aspect_ratio < 1:
+            self.sim_paths_plot.axes.imshow(
+                map_img,
+                extent=(-3*aspect_ratio, 3*aspect_ratio, -3, 3),
+                cmap='gray'
+                )
+
+            self.sim_paths_plot.axes.set_xlim(3*aspect_ratio, -3*aspect_ratio)
+        
+        else:
+            self.sim_paths_plot.axes.imshow(
+                map_img,
+                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
+                )
+
+            self.sim_paths_plot.axes.set_ylim(3*aspect_ratio, -3*aspect_ratio) 
 
         # -> Create blit managers
         self.sim_paths_bm = BlitManager(canvas=self.sim_paths_plot.fig.canvas)
@@ -47,6 +73,20 @@ class Sim_paths_view:
             x = round(self.team_members[robot_id]["pose"]["x"], 3)
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
+            # -> Update coordinated collision ray
+            from rlb_controller.robot_parameters import collsion_ray_length
+
+            if self.team_members[robot_id]["pose"]["w"] < 0:
+                w = 360 + self.team_members[robot_id]["pose"]["w"]
+            else:
+                w = self.team_members[robot_id]["pose"]["w"]
+
+            x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+
+            self.team_members[robot_id]["sim_paths_direction_pointer_artist"].set_xdata([x, x + x_end])
+            self.team_members[robot_id]["sim_paths_direction_pointer_artist"].set_ydata([y, y + y_end])
+
             # -> Update pose
             self.team_members[robot_id]["sim_paths_pose_artist"].set_xdata(x)
             self.team_members[robot_id]["sim_paths_pose_artist"].set_ydata(y)
@@ -57,21 +97,23 @@ class Sim_paths_view:
     def sim_paths_remove_robot(self, robot_id):
         try:
             # -> Remove artists from blit manager
+            self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_direction_pointer_artist"])
             self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_pose_artist"])
 
         except:
             pass
 
     def sim_paths_add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
-
-        (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'bo')
+        (sim_paths_direction_pointer_artist, ) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'co')
 
         # ---------------------------------------- Pose setup
         self.team_members[msg.robot_id]["sim_paths_pose_artist"] = sim_paths_pose_artist
+        self.team_members[msg.robot_id]["sim_paths_direction_pointer_artist"] = sim_paths_direction_pointer_artist
 
         # -> Add artists to blit
         self.sim_paths_bm.add_artist(sim_paths_pose_artist)
+        self.sim_paths_bm.add_artist(sim_paths_direction_pointer_artist)
 
 
 class MplCanvas(FigureCanvasQTAgg):

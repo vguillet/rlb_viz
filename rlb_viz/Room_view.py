@@ -176,8 +176,8 @@ class Room_view:
             x_end = collsion_ray_length * math.cos(w*math.pi/180)
             y_end = collsion_ray_length * math.sin(w*math.pi/180)
 
-            self.team_members[robot_id]["coordinated_collision_ray_artist"].set_xdata([x, x + x_end])
-            self.team_members[robot_id]["coordinated_collision_ray_artist"].set_ydata([y, y + y_end])
+            self.team_members[robot_id]["room_direction_pointer_artist"].set_xdata([x, x + x_end])
+            self.team_members[robot_id]["room_direction_pointer_artist"].set_ydata([y, y + y_end])
 
         # -> Blit updated artists
         self.room_bm.update()
@@ -194,7 +194,7 @@ class Room_view:
             self.room_bm.remove_artist(self.team_members[robot_id]["scan_circle_artist"])
             self.room_bm.remove_artist(self.team_members[robot_id]["lazer_scan_point_cloud"])
             self.room_bm.remove_artist(self.team_members[robot_id]["collision_circle_artist"])
-            self.room_bm.remove_artist(self.team_members[robot_id]["coordinated_collision_ray_artist"])
+            self.room_bm.remove_artist(self.team_members[robot_id]["room_direction_pointer_artist"])
 
             for cone_ref in vision_cones.keys():
                 self.room_bm.remove_artist(self.team_members[robot_id][cone_ref]["vision_cone_artist"])            
@@ -207,64 +207,7 @@ class Room_view:
             pass
 
     def room_add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
-
-        (room_pose_artist,) = self.room_plot.axes.plot([], [], 'bo')
-        (goal_artist,) = self.room_plot.axes.plot([], [], '-o', linewidth=0.1)
-        (goal_ray_artist,) = self.room_plot.axes.plot([0, 0], [0, 0], linestyle='dashed', linewidth=1., color='blue')
-        (lazer_scan_point_cloud_artist, ) = self.room_plot.axes.plot([], [], '.', markersize=1, color="black")
-        (coordinated_collision_ray_artist, ) = self.room_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
-
-        # ---------------------------------------- Base setup
-        self.team_members[msg.robot_id]["label_artist"] = self.room_plot.axes.annotate(
-            xy=(0,0),
-            xytext=(1, 1),
-            text=msg.robot_id
-            )
-
-        # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["room_pose_artist"] = room_pose_artist
-
-        # ---------------------------------------- Goal setup
-        self.team_members[msg.robot_id]["goal_artist"] = goal_artist
-        self.team_members[msg.robot_id]["goal_ray_artist"] = goal_ray_artist  
-
-        # ---------------------------------------- Lazer scan setup
-        self.team_members[msg.robot_id]["lazer_scan_point_cloud"] = lazer_scan_point_cloud_artist
-        self.team_members[msg.robot_id]["scan_circle_artist"] = mpatches.Circle(
-            (0, 0),
-            self.ui.lazer_scan_slider.value()/10,
-            fill=False,
-            linestyle="--",
-            linewidth=0.1
-            )
-
-        self.team_members[msg.robot_id]["collision_circle_artist"] = mpatches.Circle(
-            (0, 0),
-            0.10,
-            fill=False,
-            color="black",
-            linewidth=1
-            )
-        # ---------------------------------------- Coordinated collision setup
-        self.team_members[msg.robot_id]["coordinated_collision_ray_artist"] = coordinated_collision_ray_artist
-        
-
-        # -> Add patches to axes
-        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
-
-        # -> Add artists to blit
-        # Room
-        self.room_bm.add_artist(room_pose_artist)
-        self.room_bm.add_artist(goal_artist)
-        self.room_bm.add_artist(goal_ray_artist)
-        self.room_bm.add_artist(lazer_scan_point_cloud_artist)
-        self.room_bm.add_artist(coordinated_collision_ray_artist)
-
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+        from rlb_controller.robot_parameters import vision_cones, side_vision_cones, safety_zone
 
         # -> Add a patch for every vision cone
         for cone_ref, cone_properties in vision_cones.items():
@@ -317,6 +260,62 @@ class Room_view:
             # -> Add artist to blit
             self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
             self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+
+        # ---------------------------------------- Base setup
+        (lazer_scan_point_cloud_artist, ) = self.room_plot.axes.plot([], [], '.', markersize=1, color="black")
+        (goal_ray_artist,) = self.room_plot.axes.plot([0, 0], [0, 0], linestyle='dashed', linewidth=1., color='blue')
+        (goal_artist,) = self.room_plot.axes.plot([], [], '-o', linewidth=0.1)
+        (room_direction_pointer_artist, ) = self.room_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        (room_pose_artist,) = self.room_plot.axes.plot([], [], 'co')
+
+        self.team_members[msg.robot_id]["label_artist"] = self.room_plot.axes.annotate(
+            xy=(0,0),
+            xytext=(1, 1),
+            text=msg.robot_id
+            )
+
+        # ---------------------------------------- Pose setup
+        self.team_members[msg.robot_id]["room_pose_artist"] = room_pose_artist
+        self.team_members[msg.robot_id]["room_direction_pointer_artist"] = room_direction_pointer_artist
+
+        # ---------------------------------------- Goal setup
+        self.team_members[msg.robot_id]["goal_artist"] = goal_artist
+        self.team_members[msg.robot_id]["goal_ray_artist"] = goal_ray_artist  
+
+        # ---------------------------------------- Lazer scan setup
+        self.team_members[msg.robot_id]["lazer_scan_point_cloud"] = lazer_scan_point_cloud_artist
+        self.team_members[msg.robot_id]["scan_circle_artist"] = mpatches.Circle(
+            (0, 0),
+            self.ui.lazer_scan_slider.value()/10,
+            fill=False,
+            linestyle="--",
+            linewidth=0.1
+            )
+
+        self.team_members[msg.robot_id]["collision_circle_artist"] = mpatches.Circle(
+            (0, 0),
+            0.1,
+            fill=False,
+            color="black",
+            linewidth=safety_zone, 
+            zorder=98
+            )
+
+        # -> Add patches to axes
+        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
+
+        # -> Add artists to blit
+        # Room
+        self.room_bm.add_artist(room_pose_artist)
+        self.room_bm.add_artist(goal_artist)
+        self.room_bm.add_artist(goal_ray_artist)
+        self.room_bm.add_artist(lazer_scan_point_cloud_artist)
+        self.room_bm.add_artist(room_direction_pointer_artist)
+
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parents, width=5, height=4, dpi=100):

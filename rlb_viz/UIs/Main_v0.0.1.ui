@@ -749,5 +749,22 @@
   </widget>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>lidar_view_toggle</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>lazer_scan_slider</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>623</x>
+     <y>242</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>683</x>
+     <y>242</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>
