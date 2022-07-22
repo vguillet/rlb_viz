@@ -35,14 +35,14 @@ class Sim_map_view:
 
         # -> Load maps
         from rlb_controller.simulation_parameters import sim_map_image_path
-        map_img = image.imread(sim_map_image_path)
+        self.map_img = image.imread(sim_map_image_path)
 
         # -> Add map to plot
-        aspect_ratio = map_img.shape[1]/map_img.shape[0]
+        aspect_ratio = self.map_img.shape[1]/self.map_img.shape[0]
 
         if aspect_ratio < 1:
             self.sim_map_plot.axes.imshow(
-                map_img,
+                self.map_img,
                 extent=(-3*aspect_ratio, 3*aspect_ratio, -3, 3)
                 )
 
@@ -50,12 +50,18 @@ class Sim_map_view:
         
         else:
             self.sim_map_plot.axes.imshow(
-                map_img,
+                self.map_img,
                 extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
                 )
 
             self.sim_map_plot.axes.set_ylim(3*aspect_ratio, -3*aspect_ratio) 
 
+        # -> Format coordinates
+        def format_coord(x, y):
+            lat, lon = self.convert_coordinates(x, y)
+            return 'Long: {:6.6f}, Lat: {:6.6f}'.format(lat, lon)
+
+        self.sim_map_plot.axes.format_coord = format_coord
 
         # -> Create blit managers
         self.sim_map_bm = BlitManager(canvas=self.sim_map_plot.fig.canvas)
@@ -66,7 +72,60 @@ class Sim_map_view:
         # -> Create canvas tools widget
         toolbar = NavigationToolbar(self.sim_map_plot, self.ui)
         self.ui.main_layout_sim_map.addWidget(toolbar)
-               
+
+    def convert_coordinates(self, x, y):
+        # TOFIX: Conversion function
+        # -> Setting reference points
+        ref_1_pix =(7, 193)
+        ref_1_geo = (44.27303, 1.72456)
+
+        ref_2_pix = (871, 908)
+        ref_2_geo = (44.276598, 1.730598)
+
+        # -> Calculating differences
+        ref_dx_pix = abs(ref_2_pix[0] - ref_1_pix[0])
+        ref_dy_pix = abs(ref_2_pix[1] - ref_1_pix[1])
+
+        dlat = abs(ref_2_geo[0] - ref_1_geo[0])
+        dlon = abs(ref_2_geo[1] - ref_1_geo[1])
+
+        # -> Solving for per pixel lat/lon shift
+        dx_geo_shift = dlat/ref_dx_pix
+        dy_geo_shift = dlon/ref_dy_pix
+
+        # -> Convert provided coordinates to image reference frame
+        dx_img = self.map_img.shape[0]
+        dy_img = self.map_img.shape[1]
+
+        dx_canvas = abs(self.sim_map_plot.axes.get_xlim()[1]) + abs(self.sim_map_plot.axes.get_xlim()[0])
+        dy_canvas = abs(self.sim_map_plot.axes.get_ylim()[1]) + abs(self.sim_map_plot.axes.get_ylim()[0])
+
+        dx_img_shift = dx_img/dx_canvas
+        dy_img_shift = dy_img/dy_canvas
+
+        # -> Convert provided coordinates to geo reference frame
+        ref_1_canvas = (ref_1_pix[0] * dx_img_shift, ref_1_pix[1] * dy_img_shift)
+    
+        # x
+        dx = abs(ref_1_canvas[0] - x)
+
+        if x < ref_1_canvas[0]:
+            x_lat =  ref_1_geo[0] - dx*dx_img_shift*dx_geo_shift
+
+        else:
+            x_lat =  ref_1_geo[0] + dx*dx_img_shift*dx_geo_shift
+
+        # y
+        dy = abs(ref_1_canvas[1] - y)
+
+        if y < ref_1_canvas[1]:
+            y_lon =  ref_1_geo[1] - dy*dy_img_shift*dy_geo_shift
+
+        else:
+            y_lon =  ref_1_geo[1] + dy*dy_img_shift*dy_geo_shift
+
+        return x_lat, y_lon
+
     def sim_map_plot_robots(self):
         for robot_id in self.team_members.keys():
             x = round(self.team_members[robot_id]["pose"]["x"], 3)

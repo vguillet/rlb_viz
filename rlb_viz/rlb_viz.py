@@ -95,6 +95,7 @@ class RLB_viz_gui(
 
         # ==================================================== Setup storage variables
         self.team_members = {}
+        self.comm_rays = {}
         
         # ==================================================== Create publishers
 
@@ -288,6 +289,26 @@ class RLB_viz_gui(
             self.team_members[robot_id]["lazer_scan_point_cloud"].set(visible=False)
 
     # ================================================= Utils
+    def convert_coords_room_to_pixel(self, point, plot_axes):
+        from rlb_controller.simulation_parameters import images_shape
+
+        dx_img = images_shape[1]
+        dy_img = images_shape[0]
+
+        dx_canvas = abs(plot_axes.get_xlim()[0]) + abs(plot_axes.get_xlim()[1])
+        dy_canvas = abs(plot_axes.get_ylim()[0]) + abs(plot_axes.get_ylim()[1])
+
+        dx_img_shift = dx_img/dx_canvas
+        dy_img_shift = dy_img/dy_canvas
+
+        return (int(point[1] * dx_img_shift + dx_img/2), int(point[0] * dy_img_shift + dy_img/2))
+    
+    @property
+    def agent_pairs(self):
+        agent_list = list(self.team_members.keys())
+        agent_pairs = [(a, b) for idx, a in enumerate(agent_list) for b in agent_list[idx + 1:]]
+
+        return agent_pairs
 
     def __get_lazer_scan_point_cloud(self, robot_id):
         point_cloud_x = []
@@ -386,12 +407,13 @@ class RLB_viz_gui(
             pass
 
     def add_robot(self, msg):
+        # ---------------- Add team member entry to team members dict
         self.team_members[msg.robot_id] = {
-            # ---------------------------------------- Base setup
+            # -> Base setup
             "overview_widget": Member_overview_widget(), 
             "state": None,
 
-            # ---------------------------------------- Pose setup
+            # -> Pose setup
             "pose_subscriber": None,
             "pose": {
                 "x": 0,
@@ -402,17 +424,21 @@ class RLB_viz_gui(
                 "w": 0
                 },
                 
-            # ---------------------------------------- Goal setup
+            # -> Goal setup
             "goal": {
                 "id": "",
                 "x": [],
                 "y": []
                 },
 
-            # ---------------------------------------- Lazer scan setup
+            # -> Lazer scan setup
             "lazer_scan_subscriber": None,
             "lazer_scan": None,
         }
+        # ---------------- Add team member entry to comm_rays
+        for agent_pair in self.agent_pairs:
+            if agent_pair not in self.comm_rays.keys():
+                self.comm_rays[agent_pair] = {"comm_state": True}
 
         # -> Run modules add robot
         self.room_add_robot(msg = msg)
