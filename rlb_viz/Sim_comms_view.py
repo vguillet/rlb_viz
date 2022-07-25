@@ -7,12 +7,14 @@
 # Built-in/Generic Imports
 from cProfile import label
 import math
+import copy
 
 # Libs
 import math
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 from PyQt5.QtCore import *
 import numpy as np
 
@@ -80,18 +82,19 @@ class Sim_comms_view:
         else:
             self.sim_comms_plot.axes.imshow(
                 self.signal_blocking_prob_grid,
-                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio)
+                extent=(-3, 3, -3*aspect_ratio, 3*aspect_ratio),
+                cmap='plasma'
                 )
 
             self.sim_comms_plot.axes.set_ylim(-3*aspect_ratio, 3*aspect_ratio) 
 
-                # -> Invert axis
+        # -> Invert axis
         self.sim_comms_plot.axes.invert_xaxis()
         self.sim_comms_plot.axes.invert_yaxis()
 
         # -> Format coordinates
         def format_coord(x, y):
-            x_pix, y_pix = self.convert_coords_room_to_pixel((x, y), self.sim_comms_plot.axes)
+            (x_pix, y_pix) = self.convert_coords_room_to_pixel((x, y), self.sim_comms_plot.axes)
             return "x (pixels): {:6.1f}, y (pixels): {:6.1f}".format(x_pix, y_pix)
 
         self.sim_comms_plot.axes.format_coord = format_coord
@@ -116,15 +119,14 @@ class Sim_comms_view:
             y2 = round(self.team_members[agent_pair[1]]["pose"]["y"], 3)
 
             # -> Check comms state
-            point_1_pix = self.convert_coords_room_to_pixel(point=(x1, y1), plot_axes=self.sim_comms_plot.axes)
-            point_2_pix = self.convert_coords_room_to_pixel(point=(x2, y2), plot_axes=self.sim_comms_plot.axes)
+            point_1_pix = self.convert_coords_room_to_pixel(point_room=(x1, y1), plot_axes=self.sim_comms_plot.axes)
+            point_2_pix = self.convert_coords_room_to_pixel(point_room=(x2, y2), plot_axes=self.sim_comms_plot.axes)
 
-            self.comm_rays[agent_pair]["comm_state"], comms_integrity_profile = check_comms_available(
-                pose_1=point_1_pix, 
+            self.comm_rays[agent_pair]["comm_state"], comms_integrity_profile, ray_coordinates = check_comms_available(
+                pose_1=point_1_pix,
                 pose_2=point_2_pix,
                 obstacle_probabilities_grid=self.signal_blocking_prob_grid)
 
-            # print(point_1_pix, point_2_pix, self.comm_rays[agent_pair]["comm_state"])
             # -> Update comm integrity profile
             self.comm_rays[agent_pair]["comms_integrity_artist"].set_xdata(np.arange(0, len(comms_integrity_profile)))
             self.comm_rays[agent_pair]["comms_integrity_artist"].set_ydata([1-number for number in comms_integrity_profile])
@@ -134,8 +136,8 @@ class Sim_comms_view:
                 self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"].set(visible=True)
 
                 self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"].set_xdata([x1, x2])
-                self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"].set_ydata([y1, y2])
-
+                self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"].set_ydata([y1, y2])  
+                
             else:
                 self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"].set(visible=False)
         

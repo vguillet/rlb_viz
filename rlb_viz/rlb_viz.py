@@ -289,20 +289,50 @@ class RLB_viz_gui(
             self.team_members[robot_id]["lazer_scan_point_cloud"].set(visible=False)
 
     # ================================================= Utils
-    def convert_coords_room_to_pixel(self, point, plot_axes):
+    def convert_coords_room_to_pixel(self, point_room, plot_axes):
         from rlb_controller.simulation_parameters import images_shape
 
-        dx_img = images_shape[1]
-        dy_img = images_shape[0]
+        # -> Calculating differences
+        dx_img = images_shape[0]
+        dy_img = images_shape[1]
 
         dx_canvas = abs(plot_axes.get_xlim()[0]) + abs(plot_axes.get_xlim()[1])
         dy_canvas = abs(plot_axes.get_ylim()[0]) + abs(plot_axes.get_ylim()[1])
 
+        # -> Solving for scaling factor
         dx_img_shift = dx_img/dx_canvas
         dy_img_shift = dy_img/dy_canvas
 
-        return (int(point[1] * dx_img_shift + dx_img/2), int(point[0] * dy_img_shift + dy_img/2))
+        return (int(point_room[0] * dx_img_shift + dx_img/2), int(point_room[1] * dy_img_shift + dy_img/2))
     
+    def convert_coords_pixel_to_latlon(self, point_pixel):
+        from rlb_controller.simulation_parameters import ref_1_pixel, ref_1_latlon
+        from rlb_controller.simulation_parameters import ref_2_pixel, ref_2_latlon
+
+        # -> Calculating differences
+        ref_dx_pixel = abs(ref_2_pixel[1] - ref_1_pixel[1])
+        ref_dy_pixel = abs(ref_2_pixel[0] - ref_1_pixel[0])
+
+        ref_dlon = abs(ref_2_latlon[0] - ref_1_latlon[0])
+        ref_dlat = abs(ref_2_latlon[1] - ref_1_latlon[1])
+
+        # -> Solving for scaling factor
+        dx_lon_shift = ref_dlon/ref_dx_pixel
+        dy_lat_shift = ref_dlat/ref_dy_pixel
+
+        # -> Solving for origin latlon
+        origin_lon = ref_1_latlon[0] - ref_1_pixel[1] * dx_lon_shift
+        origin_lat = ref_1_latlon[1] - ref_1_pixel[0] * dy_lat_shift
+
+        return (origin_lon + point_pixel[1] * dx_lon_shift, 
+                origin_lat + point_pixel[0] * dy_lat_shift)
+    
+    def convert_coords_room_to_latlon(self, point_room, plot_axes):
+        point_pixel = self.convert_coords_room_to_pixel(point_room=point_room, plot_axes=plot_axes)
+        point_latlon = self.convert_coords_pixel_to_latlon(point_pixel=point_pixel)
+
+        return point_latlon
+
     @property
     def agent_pairs(self):
         agent_list = list(self.team_members.keys())
