@@ -83,7 +83,7 @@ class Room_view:
             self.team_members[robot_id]["label_artist"].set_position((x+0.05, y+0.1))
 
             # -------------------------- Update vision cones
-            from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+            from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
             if self.ui.vision_cones_toggle.isChecked():
                 # -> Update frontal cones
@@ -166,7 +166,7 @@ class Room_view:
             self.team_members[robot_id]["collision_circle_artist"].center = x, y
 
             # -> Update coordinated collision ray
-            from rlb_controller.robot_parameters import collsion_ray_length
+            from rlb_config.robot_parameters import collsion_ray_length
 
             if self.team_members[robot_id]["pose"]["w"] < 0:
                 w = 360 + self.team_members[robot_id]["pose"]["w"]
@@ -183,7 +183,7 @@ class Room_view:
         self.room_bm.update()
 
     def room_remove_robot(self, robot_id):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+        from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
         try:
             # -> Remove artists from blit manager
@@ -207,7 +207,7 @@ class Room_view:
             pass
 
     def room_add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones, safety_zone
+        from rlb_config.robot_parameters import vision_cones, side_vision_cones, safety_zone
 
         # -> Add a patch for every vision cone
         for cone_ref, cone_properties in vision_cones.items():

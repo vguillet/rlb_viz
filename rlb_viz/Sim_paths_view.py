@@ -17,7 +17,7 @@ import numpy as np
 
 # Own modules
 from .Blit_manager import BlitManager
-from rlb_coordinator.Caylus_map_loader import load_maps
+from rlb_tools.Caylus_map_loader import load_maps
 
 ##################################################################################################################
 
@@ -74,7 +74,7 @@ class Sim_paths_view:
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
             # -> Update coordinated collision ray
-            from rlb_controller.robot_parameters import collsion_ray_length
+            from rlb_config.robot_parameters import collsion_ray_length
 
             if self.team_members[robot_id]["pose"]["w"] < 0:
                 w = 360 + self.team_members[robot_id]["pose"]["w"]
@@ -90,6 +90,17 @@ class Sim_paths_view:
             # -> Update pose
             self.team_members[robot_id]["sim_paths_pose_artist"].set_xdata(x)
             self.team_members[robot_id]["sim_paths_pose_artist"].set_ydata(y)
+            
+            # -> Update projected pose
+            x_projected = round(self.team_members[robot_id]["pose_projected"]["x"], 3)
+            y_projected = round(self.team_members[robot_id]["pose_projected"]["y"], 3)
+
+            self.team_members[robot_id]["sim_paths_pose_projected_artist"].set_xdata(x_projected)
+            self.team_members[robot_id]["sim_paths_pose_projected_artist"].set_ydata(y_projected)
+
+            # -> Update projected pose ray
+            self.team_members[robot_id]["sim_paths_pose_projected_ray_artist"].set_xdata([x, x_projected])
+            self.team_members[robot_id]["sim_paths_pose_projected_ray_artist"].set_ydata([y, y_projected])
 
         # -> Blit updated artists
         self.sim_paths_bm.update()
@@ -99,21 +110,29 @@ class Sim_paths_view:
             # -> Remove artists from blit manager
             self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_direction_pointer_artist"])
             self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_pose_artist"])
+            self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_pose_projected_artist"])
+            self.sim_paths_bm.remove_artist(self.team_members[robot_id]["sim_paths_pose_projected_ray_artist"])
 
         except:
             pass
 
     def sim_paths_add_robot(self, msg):
-        (sim_paths_direction_pointer_artist, ) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        (sim_paths_direction_pointer_artist,) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
         (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'co')
+        (sim_paths_pose_projected_artist,) = self.sim_paths_plot.axes.plot([], [], 'co')
+        (sim_paths_pose_projected_ray_artist,) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='red')
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["sim_paths_pose_artist"] = sim_paths_pose_artist
         self.team_members[msg.robot_id]["sim_paths_direction_pointer_artist"] = sim_paths_direction_pointer_artist
+        self.team_members[msg.robot_id]["sim_paths_pose_artist"] = sim_paths_pose_artist
+        self.team_members[msg.robot_id]["sim_paths_pose_projected_artist"] = sim_paths_pose_projected_artist
+        self.team_members[msg.robot_id]["sim_paths_pose_projected_ray_artist"] = sim_paths_pose_projected_ray_artist
 
         # -> Add artists to blit
-        self.sim_paths_bm.add_artist(sim_paths_pose_artist)
         self.sim_paths_bm.add_artist(sim_paths_direction_pointer_artist)
+        self.sim_paths_bm.add_artist(sim_paths_pose_artist)
+        self.sim_paths_bm.add_artist(sim_paths_pose_projected_artist)
+        self.sim_paths_bm.add_artist(sim_paths_pose_projected_ray_artist)
 
 
 class MplCanvas(FigureCanvasQTAgg):

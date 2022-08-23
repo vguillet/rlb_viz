@@ -7,7 +7,9 @@
 # Built-in/Generic Imports
 from cProfile import label
 import math
+from functools import partial
 import copy
+import json
 
 # Libs
 import math
@@ -17,14 +19,16 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from PyQt5.QtCore import *
 import numpy as np
+from rclpy.qos import QoSProfile
 
 # Own modules
 from .Blit_manager import BlitManager
-from rlb_coordinator.Caylus_map_loader import load_maps
-from rlb_coordinator.Raster_ray_tracing import check_comms_available
+from rlb_tools.Caylus_map_loader import load_maps
+from rlb_tools.Raster_ray_tracing import check_comms_available
+from rlb_utils.msg import CommsState
 
 # from rlb_controller.robot_parameters import *
-from rlb_controller.simulation_parameters import *
+from rlb_config.simulation_parameters import *
 
 ##################################################################################################################
 
@@ -77,7 +81,7 @@ class Sim_comms_view:
                 cmap='plasma'
                 )
 
-            self.sim_comms_plot.axes.set_xlim(-3*aspect_ratio, 3*aspect_ratio)
+            self.sim_comms_plot.axes.set_xlim(-3, 3)
         
         else:
             self.sim_comms_plot.axes.imshow(
@@ -86,7 +90,7 @@ class Sim_comms_view:
                 cmap='plasma'
                 )
 
-            self.sim_comms_plot.axes.set_ylim(-3*aspect_ratio, 3*aspect_ratio) 
+            self.sim_comms_plot.axes.set_ylim(-3, 3) 
 
         # -> Invert axis
         self.sim_comms_plot.axes.invert_xaxis()
@@ -118,18 +122,9 @@ class Sim_comms_view:
             x2 = round(self.team_members[agent_pair[1]]["pose"]["x"], 3)
             y2 = round(self.team_members[agent_pair[1]]["pose"]["y"], 3)
 
-            # -> Check comms state
-            point_1_pix = self.convert_coords_room_to_pixel(point_room=(x1, y1), plot_axes=self.sim_comms_plot.axes)
-            point_2_pix = self.convert_coords_room_to_pixel(point_room=(x2, y2), plot_axes=self.sim_comms_plot.axes)
-
-            self.comm_rays[agent_pair]["comm_state"], comms_integrity_profile, ray_coordinates = check_comms_available(
-                pose_1=point_1_pix,
-                pose_2=point_2_pix,
-                obstacle_probabilities_grid=self.signal_blocking_prob_grid)
-
             # -> Update comm integrity profile
-            self.comm_rays[agent_pair]["comms_integrity_artist"].set_xdata(np.arange(0, len(comms_integrity_profile)))
-            self.comm_rays[agent_pair]["comms_integrity_artist"].set_ydata([1-number for number in comms_integrity_profile])
+            self.comm_rays[agent_pair]["comms_integrity_artist"].set_xdata(np.arange(0, len(self.comm_rays[agent_pair]["comms_integrity_profile"])))
+            self.comm_rays[agent_pair]["comms_integrity_artist"].set_ydata([1-number for number in self.comm_rays[agent_pair]["comms_integrity_profile"]])
 
             # -> Update comms ray
             if self.comm_rays[agent_pair]["comm_state"]:
@@ -147,7 +142,7 @@ class Sim_comms_view:
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
             # -> Update direction ray
-            from rlb_controller.robot_parameters import collsion_ray_length
+            from rlb_config.robot_parameters import collsion_ray_length
 
             if self.team_members[robot_id]["pose"]["w"] < 0:
                 w = 360 + self.team_members[robot_id]["pose"]["w"]
@@ -210,11 +205,43 @@ class Sim_comms_view:
         # ---------------------------------------- Pose setup
         self.team_members[msg.robot_id]["sim_comms_direction_pointer_artist"] = sim_comms_direction_pointer_artist
         self.team_members[msg.robot_id]["sim_comms_pose_artist"] = sim_comms_pose_artist
-
+        self.team_members[msg.robot_id]["sim_comms_range_circle_artist"] = mpatches.Circle(
+            (0, 0),
+            self.ui.lazer_scan_slider.value()/10,
+            fill=False,
+            linestyle="--",
+            linewidth=0.1
+            )
+        
         # -> Add artists to blit
         self.sim_comms_bm.add_artist(sim_comms_direction_pointer_artist)
         self.sim_comms_bm.add_artist(sim_comms_pose_artist)
 
+        # -> Comms state subscriber
+        qos = QoSProfile(depth=10)
+
+        self.team_members[msg.robot_id]["comms_state_subscriber"] = self.node.create_subscription(
+            msg_type=CommsState,
+            topic=f"/{msg.robot_id}/comms_state",
+            callback=partial(self.comms_state_msg_subscriber_callback, msg.robot_id),
+            qos_profile=qos
+            )
+
+    def comms_state_msg_subscriber_callback(self, robot_id, msg):
+        comms_state = json.loads(msg.comms_states)
+
+        # -> Parse through all agents pairs
+        for agent, comms_state in comms_state.items():
+            if (robot_id, agent) in self.comm_rays:
+                agent_pair = (robot_id, agent)
+            else:
+                agent_pair = (agent, robot_id)
+
+            try:
+                self.comm_rays[agent_pair]["comm_state"] = comms_state["comm_state"]
+                self.comm_rays[agent_pair]["comms_integrity_profile"] = comms_state["comms_integrity_profile"]
+            except:
+                pass
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parents, width=5, height=4, dpi=100):

@@ -55,7 +55,7 @@ class Room_energy_surface_view:
         self.room_energy_surface_bm.update()
 
     def room_energy_surface_remove_robot(self, robot_id):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+        from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
         try:
             # -> Remove artists from blit manager
@@ -65,7 +65,7 @@ class Room_energy_surface_view:
             pass
 
     def room_energy_surface_add_robot(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+        from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
         (room_energy_surface_pose_artist,) = self.room_energy_surface_plot.axes.plot([], [], [], 'bo')
 

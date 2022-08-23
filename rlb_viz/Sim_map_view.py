@@ -34,7 +34,7 @@ class Sim_map_view:
                                    dpi=100)
 
         # -> Load maps
-        from rlb_controller.simulation_parameters import sim_map_image_path
+        from rlb_config.simulation_parameters import sim_map_image_path
         self.map_img = image.imread(sim_map_image_path)
 
         # -> Add map to plot
@@ -82,7 +82,7 @@ class Sim_map_view:
             y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
             # -> Update coordinated collision ray
-            from rlb_controller.robot_parameters import collsion_ray_length
+            from rlb_config.robot_parameters import collsion_ray_length
 
             if self.team_members[robot_id]["pose"]["w"] < 0:
                 w = 360 + self.team_members[robot_id]["pose"]["w"]

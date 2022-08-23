@@ -9,6 +9,7 @@ import json
 import os
 import queue
 import math
+from functools import partial
 
 # Libs
 import PyQt5
@@ -26,15 +27,11 @@ from sensor_msgs.msg import JointState, LaserScan
 from rlb_utils.msg import Goal, TeamComm
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import numpy as np
-import math
 
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
-
-
-from functools import partial
 
 # Own modules
 from .Room_view import Room_view
@@ -42,6 +39,7 @@ from .Room_energy_surface_view import Room_energy_surface_view
 from .Sim_map_view import Sim_map_view
 from .Sim_comms_view import Sim_comms_view
 from .Sim_paths_view import Sim_paths_view
+from .rlb_gazebo_turtles_sync import Rlb_gazebo_turtles_sync
 
 # from rlb_coordinator.Caylus_map_loader import load_maps
 from .UI_singletons import Ui_singleton
@@ -61,7 +59,8 @@ class RLB_viz_gui(
     Room_energy_surface_view,
     Sim_map_view,
     Sim_comms_view,
-    Sim_paths_view
+    Sim_paths_view,
+    Rlb_gazebo_turtles_sync
     ):
     def __init__(self):
         # ==================================================== Load GUI
@@ -98,9 +97,6 @@ class RLB_viz_gui(
         self.comm_rays = {}
         
         # ==================================================== Create publishers
-
-
-        # ==================================================== Create subscribers
         # ----------------------------------- Team communications publisher
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
@@ -109,10 +105,11 @@ class RLB_viz_gui(
 
         self.team_comms_publisher = self.node.create_publisher(
             msg_type=TeamComm,
-            topic="/Team_comms",
+            topic="/team_comms",
             qos_profile=qos
             )
 
+        # ==================================================== Create subscribers
         # ----------------------------------- Team communications subscriber
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
@@ -121,13 +118,13 @@ class RLB_viz_gui(
 
         self.team_comms_subscriber = self.node.create_subscription(
             msg_type=TeamComm,
-            topic="/Team_comms",
+            topic="/team_comms",
             callback=self.team_msg_subscriber_callback,
             qos_profile=qos
             )
 
         # ----------------------------------- Goal subscribers
-        from rlb_controller.robot_parameters import goals_topic
+        from rlb_config.robot_parameters import goals_topic
 
         qos = QoSProfile(depth=10)
 
@@ -251,6 +248,19 @@ class RLB_viz_gui(
         self.team_members[robot_id]["overview_widget"].ui.pose_v.setText("{:10.3f}".format(round(v, 3)))
         self.team_members[robot_id]["overview_widget"].ui.pose_w.setText("{:10.3f}".format(round(w, 3)))
 
+    def pose_projected_subscriber_callback(self, robot_id, msg):
+        # -> Update position
+        self.team_members[robot_id]["pose_projected"]["x"] = msg.pose.position.x
+        self.team_members[robot_id]["pose_projected"]["y"] = msg.pose.position.y
+        self.team_members[robot_id]["pose_projected"]["z"] = msg.pose.position.z
+
+        # -> Update orientation
+        u, v, w = self.__euler_from_quaternion(quat=msg.pose.orientation)
+
+        self.team_members[robot_id]["pose_projected"]["u"] = u
+        self.team_members[robot_id]["pose_projected"]["v"] = v
+        self.team_members[robot_id]["pose_projected"]["w"] = w
+
     def lazer_scan_subscriber_callback(self, robot_id, msg):
         scan = list(msg.ranges)
         
@@ -290,7 +300,7 @@ class RLB_viz_gui(
 
     # ================================================= Utils
     def convert_coords_room_to_pixel(self, point_room, plot_axes):
-        from rlb_controller.simulation_parameters import images_shape
+        from rlb_config.simulation_parameters import images_shape
 
         # -> Calculating differences
         dx_img = images_shape[0]
@@ -306,8 +316,8 @@ class RLB_viz_gui(
         return (int(point_room[0] * dx_img_shift + dx_img/2), int(point_room[1] * dy_img_shift + dy_img/2))
     
     def convert_coords_pixel_to_latlon(self, point_pixel):
-        from rlb_controller.simulation_parameters import ref_1_pixel, ref_1_latlon
-        from rlb_controller.simulation_parameters import ref_2_pixel, ref_2_latlon
+        from rlb_config.simulation_parameters import ref_1_pixel, ref_1_latlon
+        from rlb_config.simulation_parameters import ref_2_pixel, ref_2_latlon
 
         # -> Calculating differences
         ref_dx_pixel = abs(ref_2_pixel[1] - ref_1_pixel[1])
@@ -418,6 +428,7 @@ class RLB_viz_gui(
         self.sim_map_remove_robot(robot_id=robot_id)
         self.sim_comms_remove_robot(robot_id=robot_id)
         self.sim_paths_remove_robot(robot_id=robot_id)
+        self.rlb_gazebo_remove_robot(robot_id=robot_id)
 
         try:
             # -> Delete subscribers
@@ -446,12 +457,23 @@ class RLB_viz_gui(
             # -> Pose setup
             "pose_subscriber": None,
             "pose": {
-                "x": 0,
-                "y": 0,
-                "z": 0,
-                "u": 0,
-                "v": 0,
-                "w": 0
+                "x": 0.,
+                "y": 0.,
+                "z": 0.,
+                "u": 0.,
+                "v": 0.,
+                "w": 0.
+                },
+
+            # -> Pose projected setup
+            "pose_projected_subscriber": None,
+            "pose_projected": {
+                "x": 0.,
+                "y": 0.,
+                "z": 0.,
+                "u": 0.,
+                "v": 0.,
+                "w": 0.
                 },
                 
             # -> Goal setup
@@ -468,7 +490,10 @@ class RLB_viz_gui(
         # ---------------- Add team member entry to comm_rays
         for agent_pair in self.agent_pairs:
             if agent_pair not in self.comm_rays.keys():
-                self.comm_rays[agent_pair] = {"comm_state": True}
+                self.comm_rays[agent_pair] = {
+                    "comm_state": True,
+                    "comms_integrity_profile": []
+                    }
 
         # -> Run modules add robot
         self.room_add_robot(msg = msg)
@@ -476,6 +501,7 @@ class RLB_viz_gui(
         self.sim_map_add_robot(msg=msg)
         self.sim_comms_add_robot(msg=msg)
         self.sim_paths_add_robot(msg=msg)
+        self.rlb_gazebo_add_robot(msg=msg)
 
         # -> Update member widget
         self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setText(msg.robot_id)
@@ -500,6 +526,20 @@ class RLB_viz_gui(
             msg_type=PoseStamped,
             topic=f"/{msg.robot_id}/pose",
             callback=partial(self.pose_subscriber_callback, msg.robot_id),
+            qos_profile=qos
+            )
+
+        # -> Create pose projected subscribers
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+            depth=1
+            )
+
+        self.team_members[msg.robot_id]["pose_projected_subscriber"] = self.node.create_subscription(
+            msg_type=PoseStamped,
+            topic=f"/{msg.robot_id}/pose_projected",
+            callback=partial(self.pose_projected_subscriber_callback, msg.robot_id),
             qos_profile=qos
             )
 
@@ -554,11 +594,12 @@ class MplCanvas(FigureCanvasQTAgg):
         self.setFocus()
 
     def built_canvas(self):
-        x_min = -3
-        x_max = 3
+        from rlb_controller.room_paramters import room_x_range, room_y_range
+        x_min = room_x_range[0]
+        x_max = room_x_range[1]
 
-        y_min = -3
-        y_max = 3
+        y_min = room_y_range[0]
+        y_max = room_y_range[1]
 
         self.axes = self.fig.add_subplot(111)
         # self.axes.axis("off")

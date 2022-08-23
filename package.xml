@@ -12,8 +12,12 @@
   <depend>rclpy</depend>
   <depend>sensor_msgs</depend>
   <depend>turtlebot3_msgs</depend>
+  <depend>gazebo_msgs</depend>
 
   <exec_depend>rlb_utils</exec_depend>
+  <exec_depend>rlb_tools</exec_depend>
+  <exec_depend>rlb_config</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
