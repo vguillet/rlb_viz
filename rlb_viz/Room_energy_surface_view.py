@@ -79,8 +79,8 @@ class Room_energy_surface_view:
 
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["room_energy_surface_pose_artist"] = room_energy_surface_pose_artist
-        self.team_members[msg.robot_id]["room_energy_surface_artist"] = room_energy_surface_artist
+        self.team_members[msg.source]["room_energy_surface_pose_artist"] = room_energy_surface_pose_artist
+        self.team_members[msg.source]["room_energy_surface_artist"] = room_energy_surface_artist
 
         # -> Add artists to blit
         self.room_energy_surface_bm.add_artist(room_energy_surface_pose_artist)

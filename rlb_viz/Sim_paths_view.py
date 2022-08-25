@@ -119,14 +119,14 @@ class Sim_paths_view:
     def sim_paths_add_robot(self, msg):
         (sim_paths_direction_pointer_artist,) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
         (sim_paths_pose_artist,) = self.sim_paths_plot.axes.plot([], [], 'co')
-        (sim_paths_pose_projected_artist,) = self.sim_paths_plot.axes.plot([], [], 'co')
+        (sim_paths_pose_projected_artist,) = self.sim_paths_plot.axes.plot([], [], 'co', color='orange')
         (sim_paths_pose_projected_ray_artist,) = self.sim_paths_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='red')
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["sim_paths_direction_pointer_artist"] = sim_paths_direction_pointer_artist
-        self.team_members[msg.robot_id]["sim_paths_pose_artist"] = sim_paths_pose_artist
-        self.team_members[msg.robot_id]["sim_paths_pose_projected_artist"] = sim_paths_pose_projected_artist
-        self.team_members[msg.robot_id]["sim_paths_pose_projected_ray_artist"] = sim_paths_pose_projected_ray_artist
+        self.team_members[msg.source]["sim_paths_direction_pointer_artist"] = sim_paths_direction_pointer_artist
+        self.team_members[msg.source]["sim_paths_pose_artist"] = sim_paths_pose_artist
+        self.team_members[msg.source]["sim_paths_pose_projected_artist"] = sim_paths_pose_projected_artist
+        self.team_members[msg.source]["sim_paths_pose_projected_ray_artist"] = sim_paths_pose_projected_ray_artist
 
         # -> Add artists to blit
         self.sim_paths_bm.add_artist(sim_paths_direction_pointer_artist)

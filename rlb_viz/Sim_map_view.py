@@ -78,26 +78,37 @@ class Sim_map_view:
 
     def sim_map_plot_robots(self):
         for robot_id in self.team_members.keys():
-            x = round(self.team_members[robot_id]["pose"]["x"], 3)
-            y = round(self.team_members[robot_id]["pose"]["y"], 3)
+            # x = round(self.team_members[robot_id]["pose"]["x"], 3)
+            # y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
-            # -> Update coordinated collision ray
-            from rlb_config.robot_parameters import collsion_ray_length
+            # # -> Update coordinated collision ray
+            # from rlb_config.robot_parameters import collsion_ray_length
 
-            if self.team_members[robot_id]["pose"]["w"] < 0:
-                w = 360 + self.team_members[robot_id]["pose"]["w"]
-            else:
-                w = self.team_members[robot_id]["pose"]["w"]
+            # if self.team_members[robot_id]["pose"]["w"] < 0:
+            #     w = 360 + self.team_members[robot_id]["pose"]["w"]
+            # else:
+            #     w = self.team_members[robot_id]["pose"]["w"]
 
-            x_end = collsion_ray_length * math.cos(w*math.pi/180)
-            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+            # x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            # y_end = collsion_ray_length * math.sin(w*math.pi/180)
 
-            self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_xdata([x, x + x_end])
-            self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_ydata([y, y + y_end])
+            # self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_xdata([x, x + x_end])
+            # self.team_members[robot_id]["sim_map_direction_pointer_artist"].set_ydata([y, y + y_end])
 
-            # -> Update pose
-            self.team_members[robot_id]["sim_map_pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["sim_map_pose_artist"].set_ydata(y)
+            # # -> Update pose
+            # self.team_members[robot_id]["sim_map_pose_artist"].set_xdata(x)
+            # self.team_members[robot_id]["sim_map_pose_artist"].set_ydata(y)
+
+            # -> Update projected pose
+            x_projected = round(self.team_members[robot_id]["pose_projected"]["x"], 3)
+            y_projected = round(self.team_members[robot_id]["pose_projected"]["y"], 3)
+
+            self.team_members[robot_id]["sim_map_pose_projected_artist"].set_xdata(x_projected)
+            self.team_members[robot_id]["sim_map_pose_projected_artist"].set_ydata(y_projected)
+
+            # -> Update projected pose ray
+            # self.team_members[robot_id]["sim_map_pose_projected_ray_artist"].set_xdata([x, x_projected])
+            # self.team_members[robot_id]["sim_map_pose_projected_ray_artist"].set_ydata([y, y_projected])
 
         # -> Blit updated artists
         self.sim_map_bm.update()
@@ -105,23 +116,31 @@ class Sim_map_view:
     def sim_map_remove_robot(self, robot_id):
         try:
             # -> Remove artists from blit manager
-            self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_pose_artist"])
-            self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_direction_pointer_artist"])
+            # self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_pose_artist"])
+            # self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_direction_pointer_artist"])
+            self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_pose_projected_artist"])
+            self.sim_map_bm.remove_artist(self.team_members[robot_id]["sim_map_pose_projected_ray_artist"])
 
         except:
             pass
 
     def sim_map_add_robot(self, msg):
-        (sim_map_direction_pointer_artist, ) = self.sim_map_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
-        (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'co')
+        # (sim_map_direction_pointer_artist, ) = self.sim_map_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
+        # (sim_map_pose_artist,) = self.sim_map_plot.axes.plot([], [], 'co')
+        (sim_map_pose_projected_artist,) = self.sim_map_plot.axes.plot([], [], 'co', color='orange')
+        # (sim_map_pose_projected_ray_artist,) = self.sim_map_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='red')
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["sim_map_direction_pointer_artist"] = sim_map_direction_pointer_artist
-        self.team_members[msg.robot_id]["sim_map_pose_artist"] = sim_map_pose_artist
+        # self.team_members[msg.source]["sim_map_direction_pointer_artist"] = sim_map_direction_pointer_artist
+        # self.team_members[msg.source]["sim_map_pose_artist"] = sim_map_pose_artist
+        self.team_members[msg.source]["sim_map_pose_projected_artist"] = sim_map_pose_projected_artist
+        # self.team_members[msg.source]["sim_map_pose_projected_ray_artist"] = sim_map_pose_projected_ray_artist
 
         # -> Add artists to blit
-        self.sim_map_bm.add_artist(sim_map_pose_artist)
-        self.sim_map_bm.add_artist(sim_map_direction_pointer_artist)
+        # self.sim_map_bm.add_artist(sim_map_pose_artist)
+        # self.sim_map_bm.add_artist(sim_map_direction_pointer_artist)
+        self.sim_map_bm.add_artist(sim_map_pose_projected_artist)
+        # self.sim_map_bm.add_artist(sim_map_pose_projected_ray_artist)
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parents, width=5, height=4, dpi=100):

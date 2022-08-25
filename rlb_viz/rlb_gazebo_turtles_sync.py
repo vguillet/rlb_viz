@@ -47,20 +47,20 @@ class Rlb_gazebo_turtles_sync:
 
     def rlb_gazebo_add_robot(self, msg):
 
-        self.team_members[msg.robot_id]["rlb_gazebo_model_state_service"] = self.node.create_client(
+        self.team_members[msg.source]["rlb_gazebo_model_state_service"] = self.node.create_client(
             SetEntityState,
             "/gazebo/set_entity_state"
         )
 
         timer_period = 0.001  # seconds
-        self.team_members[msg.robot_id]["rlb_gazebo_model_state_service_timer"] = self.node.create_timer(
+        self.team_members[msg.source]["rlb_gazebo_model_state_service_timer"] = self.node.create_timer(
             timer_period, 
-            partial(self.gazebo_model_pose_service_request, msg.robot_id),
+            partial(self.gazebo_model_pose_service_request, msg.source),
         )
 
         # # -> Setup agent rlb_gazebo_state_publisher
         # qos = QoSProfile(depth=10)
-        # self.team_members[msg.robot_id]["rlb_gazebo_state_publisher"] = self.node.create_publisher(
+        # self.team_members[msg.source]["rlb_gazebo_state_publisher"] = self.node.create_publisher(
         #     msg_type=EntityState,
         #     topic="/gazebo/set_entity_state",
         #     qos_profile=qos
@@ -69,9 +69,9 @@ class Rlb_gazebo_turtles_sync:
         # # -> Setup publisher_timer
         # timer_period = 1.  # seconds
 
-        # self.team_members[msg.robot_id]["rlb_gazebo_state_publisher_timer"] = self.node.create_timer(
+        # self.team_members[msg.source]["rlb_gazebo_state_publisher_timer"] = self.node.create_timer(
         #     timer_period, 
-        #     partial(self.gazebo_publisher_callback, msg.robot_id),
+        #     partial(self.gazebo_publisher_callback, msg.source),
         # )
 
     def gazebo_model_pose_service_request(self,robot_id):

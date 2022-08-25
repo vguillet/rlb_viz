@@ -12,7 +12,7 @@ import copy
 import json
 
 # Libs
-import math
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 import matplotlib.patches as mpatches
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -116,11 +116,17 @@ class Sim_comms_view:
     def sim_comms_plot_robots(self):
         # -> Update robots pairs
         for agent_pair in self.agent_pairs:
-            x1 = round(self.team_members[agent_pair[0]]["pose"]["x"], 3)
-            y1 = round(self.team_members[agent_pair[0]]["pose"]["y"], 3)
+            if pose_tracked == "room":
+                key = "pose"
 
-            x2 = round(self.team_members[agent_pair[1]]["pose"]["x"], 3)
-            y2 = round(self.team_members[agent_pair[1]]["pose"]["y"], 3)
+            elif pose_tracked == "projected":
+                key = "pose_projected"
+
+            x1 = round(self.team_members[agent_pair[0]][key]["x"], 3)
+            y1 = round(self.team_members[agent_pair[0]][key]["y"], 3)
+
+            x2 = round(self.team_members[agent_pair[1]][key]["x"], 3)
+            y2 = round(self.team_members[agent_pair[1]][key]["y"], 3)
 
             # -> Update comm integrity profile
             self.comm_rays[agent_pair]["comms_integrity_artist"].set_xdata(np.arange(0, len(self.comm_rays[agent_pair]["comms_integrity_profile"])))
@@ -138,26 +144,37 @@ class Sim_comms_view:
         
         # -> Update robots
         for robot_id in self.team_members.keys():
-            x = round(self.team_members[robot_id]["pose"]["x"], 3)
-            y = round(self.team_members[robot_id]["pose"]["y"], 3)
+            # x = round(self.team_members[robot_id]["pose"]["x"], 3)
+            # y = round(self.team_members[robot_id]["pose"]["y"], 3)
 
-            # -> Update direction ray
-            from rlb_config.robot_parameters import collsion_ray_length
+            # # -> Update direction ray
+            # from rlb_config.robot_parameters import collsion_ray_length
 
-            if self.team_members[robot_id]["pose"]["w"] < 0:
-                w = 360 + self.team_members[robot_id]["pose"]["w"]
-            else:
-                w = self.team_members[robot_id]["pose"]["w"]
+            # if self.team_members[robot_id]["pose"]["w"] < 0:
+            #     w = 360 + self.team_members[robot_id]["pose"]["w"]
+            # else:
+            #     w = self.team_members[robot_id]["pose"]["w"]
 
-            x_end = collsion_ray_length * math.cos(w*math.pi/180)
-            y_end = collsion_ray_length * math.sin(w*math.pi/180)
+            # x_end = collsion_ray_length * math.cos(w*math.pi/180)
+            # y_end = collsion_ray_length * math.sin(w*math.pi/180)
 
-            self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_xdata([x, x + x_end])
-            self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_ydata([y, y + y_end])
+            # self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_xdata([x, x + x_end])
+            # self.team_members[robot_id]["sim_comms_direction_pointer_artist"].set_ydata([y, y + y_end])
 
-            # -> Update pose
-            self.team_members[robot_id]["sim_comms_pose_artist"].set_xdata(x)
-            self.team_members[robot_id]["sim_comms_pose_artist"].set_ydata(y)
+            # # -> Update pose
+            # self.team_members[robot_id]["sim_comms_pose_artist"].set_xdata(x)
+            # self.team_members[robot_id]["sim_comms_pose_artist"].set_ydata(y)
+            
+            # -> Update projected pose
+            x_projected = round(self.team_members[robot_id]["pose_projected"]["x"], 3)
+            y_projected = round(self.team_members[robot_id]["pose_projected"]["y"], 3)
+
+            self.team_members[robot_id]["sim_comms_pose_projected_artist"].set_xdata(x_projected)
+            self.team_members[robot_id]["sim_comms_pose_projected_artist"].set_ydata(y_projected)
+
+            # # -> Update projected pose ray
+            # self.team_members[robot_id]["sim_comms_pose_projected_ray_artist"].set_xdata([x, x_projected])
+            # self.team_members[robot_id]["sim_comms_pose_projected_ray_artist"].set_ydata([y, y_projected])
 
         # -> Blit updated artists
         self.comms_integrity_monitor_bm.update()
@@ -166,14 +183,16 @@ class Sim_comms_view:
     def sim_comms_remove_robot(self, robot_id):
         try:
             # -> Remove artists from blit manager
-            self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_pose_artist"])
-            self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_direction_pointer_artist"])
+            # self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_pose_artist"])
+            # self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_direction_pointer_artist"])
+            self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_pose_projected_artist"])
+            # self.sim_comms_bm.remove_artist(self.team_members[robot_id]["sim_comms_pose_projected_ray_artist"])
 
             for agent_pair in self.agent_pairs:
                 if robot_id in agent_pair:
                     self.sim_comms_bm.remove_artist(self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"])
                     self.comms_integrity_monitor_bm.remove_artist(self.comm_rays[agent_pair]["comms_integrity_artist"])
-                    
+
                     del self.comm_rays[agent_pair]["sim_comms_comm_ray_artist"]
                     del self.comm_rays[agent_pair]["comms_integrity_artist"]
             
@@ -199,13 +218,19 @@ class Sim_comms_view:
                 # -> Add artist to blit
                 self.comms_integrity_monitor_bm.add_artist(comm_integrity_artist)
 
-        (sim_comms_direction_pointer_artist, ) = self.sim_comms_plot.axes.plot([], [], linewidth=.5, color='green')
-        (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'co')
+        # (sim_comms_direction_pointer_artist, ) = self.sim_comms_plot.axes.plot([], [], linewidth=.5, color='green')
+        # (sim_comms_pose_artist,) = self.sim_comms_plot.axes.plot([], [], 'co')
+        (sim_comms_pose_projected_artist,) = self.sim_comms_plot.axes.plot([], [], 'co', color='orange')
+        # (sim_comms_pose_projected_ray_artist,) = self.sim_comms_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='red')
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["sim_comms_direction_pointer_artist"] = sim_comms_direction_pointer_artist
-        self.team_members[msg.robot_id]["sim_comms_pose_artist"] = sim_comms_pose_artist
-        self.team_members[msg.robot_id]["sim_comms_range_circle_artist"] = mpatches.Circle(
+        # self.team_members[msg.source]["sim_comms_direction_pointer_artist"] = sim_comms_direction_pointer_artist
+        # self.team_members[msg.source]["sim_comms_pose_artist"] = sim_comms_pose_artist
+        self.team_members[msg.source]["sim_comms_pose_projected_artist"] = sim_comms_pose_projected_artist
+        # self.team_members[msg.source]["sim_comms_pose_projected_ray_artist"] = sim_comms_pose_projected_ray_artist
+
+        
+        self.team_members[msg.source]["sim_comms_range_circle_artist"] = mpatches.Circle(
             (0, 0),
             self.ui.lazer_scan_slider.value()/10,
             fill=False,
@@ -214,16 +239,22 @@ class Sim_comms_view:
             )
         
         # -> Add artists to blit
-        self.sim_comms_bm.add_artist(sim_comms_direction_pointer_artist)
-        self.sim_comms_bm.add_artist(sim_comms_pose_artist)
+        # self.sim_comms_bm.add_artist(sim_comms_direction_pointer_artist)
+        # self.sim_comms_bm.add_artist(sim_comms_pose_artist)
+        self.sim_comms_bm.add_artist(sim_comms_pose_projected_artist)
+        # self.sim_comms_bm.add_artist(sim_comms_pose_projected_ray_artist)
 
         # -> Comms state subscriber
-        qos = QoSProfile(depth=10)
+        qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT,
+            history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_LAST,
+            depth=1
+            )
 
-        self.team_members[msg.robot_id]["comms_state_subscriber"] = self.node.create_subscription(
+        self.team_members[msg.source]["comms_state_subscriber"] = self.node.create_subscription(
             msg_type=CommsState,
-            topic=f"/{msg.robot_id}/comms_state",
-            callback=partial(self.comms_state_msg_subscriber_callback, msg.robot_id),
+            topic=f"/{msg.source}/sim/comms_state",
+            callback=partial(self.comms_state_msg_subscriber_callback, msg.source),
             qos_profile=qos
             )
 

@@ -211,7 +211,7 @@ class Room_view:
 
         # -> Add a patch for every vision cone
         for cone_ref, cone_properties in vision_cones.items():
-            self.team_members[msg.robot_id][cone_ref] = {
+            self.team_members[msg.source][cone_ref] = {
                 "treshold": cone_properties["threshold"],
                 "angle": cone_properties["angle"],
                 "triggered": False,
@@ -224,13 +224,13 @@ class Room_view:
             }
 
             # -> Add artist to plot
-            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.source][cone_ref]["vision_cone_artist"])
 
             # -> Add artist to blit
-            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.source][cone_ref]["vision_cone_artist"])
 
         for cone_ref, cone_properties in side_vision_cones.items():
-            self.team_members[msg.robot_id][cone_ref] = {
+            self.team_members[msg.source][cone_ref] = {
                 "treshold": cone_properties["threshold"],
                 "angle": cone_properties["angle"],
                 "l_triggered": False,
@@ -250,16 +250,16 @@ class Room_view:
             }
 
             # -> Hide side collision patches
-            self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
-            self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.source][cone_ref]["l_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.source][cone_ref]["r_vision_cone_artist"].set(visible=False)
 
             # -> Add artist to plot
-            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
-            self.room_plot.axes.add_patch(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.source][cone_ref]["l_vision_cone_artist"])
+            self.room_plot.axes.add_patch(self.team_members[msg.source][cone_ref]["r_vision_cone_artist"])
 
             # -> Add artist to blit
-            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"])
-            self.room_bm.add_artist(self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.source][cone_ref]["l_vision_cone_artist"])
+            self.room_bm.add_artist(self.team_members[msg.source][cone_ref]["r_vision_cone_artist"])
 
         # ---------------------------------------- Base setup
         (lazer_scan_point_cloud_artist, ) = self.room_plot.axes.plot([], [], '.', markersize=1, color="black")
@@ -268,23 +268,23 @@ class Room_view:
         (room_direction_pointer_artist, ) = self.room_plot.axes.plot([0, 0], [0, 0], linewidth=.5, color='green')
         (room_pose_artist,) = self.room_plot.axes.plot([], [], 'co')
 
-        self.team_members[msg.robot_id]["label_artist"] = self.room_plot.axes.annotate(
+        self.team_members[msg.source]["label_artist"] = self.room_plot.axes.annotate(
             xy=(0,0),
             xytext=(1, 1),
-            text=msg.robot_id
+            text=msg.source
             )
 
         # ---------------------------------------- Pose setup
-        self.team_members[msg.robot_id]["room_pose_artist"] = room_pose_artist
-        self.team_members[msg.robot_id]["room_direction_pointer_artist"] = room_direction_pointer_artist
+        self.team_members[msg.source]["room_pose_artist"] = room_pose_artist
+        self.team_members[msg.source]["room_direction_pointer_artist"] = room_direction_pointer_artist
 
         # ---------------------------------------- Goal setup
-        self.team_members[msg.robot_id]["goal_artist"] = goal_artist
-        self.team_members[msg.robot_id]["goal_ray_artist"] = goal_ray_artist  
+        self.team_members[msg.source]["goal_artist"] = goal_artist
+        self.team_members[msg.source]["goal_ray_artist"] = goal_ray_artist  
 
         # ---------------------------------------- Lazer scan setup
-        self.team_members[msg.robot_id]["lazer_scan_point_cloud"] = lazer_scan_point_cloud_artist
-        self.team_members[msg.robot_id]["scan_circle_artist"] = mpatches.Circle(
+        self.team_members[msg.source]["lazer_scan_point_cloud"] = lazer_scan_point_cloud_artist
+        self.team_members[msg.source]["scan_circle_artist"] = mpatches.Circle(
             (0, 0),
             self.ui.lazer_scan_slider.value()/10,
             fill=False,
@@ -292,7 +292,7 @@ class Room_view:
             linewidth=0.1
             )
 
-        self.team_members[msg.robot_id]["collision_circle_artist"] = mpatches.Circle(
+        self.team_members[msg.source]["collision_circle_artist"] = mpatches.Circle(
             (0, 0),
             0.1,
             fill=False,
@@ -302,8 +302,8 @@ class Room_view:
             )
 
         # -> Add patches to axes
-        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.room_plot.axes.add_patch(self.team_members[msg.robot_id]["collision_circle_artist"])
+        self.room_plot.axes.add_patch(self.team_members[msg.source]["scan_circle_artist"])
+        self.room_plot.axes.add_patch(self.team_members[msg.source]["collision_circle_artist"])
 
         # -> Add artists to blit
         # Room
@@ -313,9 +313,9 @@ class Room_view:
         self.room_bm.add_artist(lazer_scan_point_cloud_artist)
         self.room_bm.add_artist(room_direction_pointer_artist)
 
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["scan_circle_artist"])
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["collision_circle_artist"])
-        self.room_bm.add_artist(self.team_members[msg.robot_id]["label_artist"])
+        self.room_bm.add_artist(self.team_members[msg.source]["scan_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.source]["collision_circle_artist"])
+        self.room_bm.add_artist(self.team_members[msg.source]["label_artist"])
 
 class MplCanvas(FigureCanvasQTAgg):
     def __init__(self, parents, width=5, height=4, dpi=100):

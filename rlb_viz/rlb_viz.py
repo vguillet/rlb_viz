@@ -10,6 +10,7 @@ import os
 import queue
 import math
 from functools import partial
+import subprocess
 
 # Libs
 import PyQt5
@@ -105,7 +106,7 @@ class RLB_viz_gui(
 
         self.team_comms_publisher = self.node.create_publisher(
             msg_type=TeamComm,
-            topic="/team_comms",
+            topic="/rlb_msgs",
             qos_profile=qos
             )
 
@@ -118,7 +119,7 @@ class RLB_viz_gui(
 
         self.team_comms_subscriber = self.node.create_subscription(
             msg_type=TeamComm,
-            topic="/team_comms",
+            topic="/rlb_msgs",
             callback=self.team_msg_subscriber_callback,
             qos_profile=qos
             )
@@ -137,6 +138,12 @@ class RLB_viz_gui(
             )
 
         # self.goals_msgs = queue.Queue()
+
+        # ==================================================== Connect launcher buttons
+        self.ui.launch_natnet.clicked.connect(self.__launch_natnet)
+        self.ui.launch_controllers.clicked.connect(self.__launch_controllers)
+        self.ui.launch_comms_sim.clicked.connect(self.__launch_comms_sim)
+        self.ui.simple_sim_launch.clicked.connect(self.__launch_simple_sim)
 
         # ==================================================== Final setup
         # -> Load IHM modules
@@ -162,30 +169,44 @@ class RLB_viz_gui(
         # -> Spin once
         rclpy.spin_once(self.node)
 
+    # ================================================= Launcher def
+    def __launch_natnet(self):
+        output = subprocess.Popen(["sh", "launch_natnet.sh"])
+
+    def __launch_controllers(self):
+        count = self.ui.controller_count.value()
+        output = subprocess.Popen(["ros2", "launch", "rlb_controller", f"rlb_{count}_launch.py"]) 
+
+    def __launch_comms_sim(self):
+        output = subprocess.Popen(["ros2", "run", "rlb_comms", "rlb_comms"], text=False)
+
+    def __launch_simple_sim(self):
+        output = subprocess.Popen(["ros2", "run", "rlb_simple_sim", "source_sim"], text=False)
+
     # ================================================= Callbacks definition
     # ---------------------------------- Publishers
     def placeholder_callback(self):
         # -> Artificial add bots
         for i in range(1):
             msg = TeamComm()
-            msg.robot_id = f"Turtle_{i+1}"
+            msg.source = f"Turtle_{i+1}"
+            msg.source_type = "robot"
             msg.type = "Initial"
-            msg.memo = ""
 
             self.add_robot(msg=msg)
 
     # ---------------------------------- Subscribers
     def team_msg_subscriber_callback(self, msg):
-        if msg.robot_id not in self.team_members.keys() and self.ui.auto_add_robots.isChecked():
+        if msg.source not in self.team_members.keys() and msg.source_type == "robot" and self.ui.auto_add_robots.isChecked():
             self.add_robot(msg=msg)
 
         if msg.type == "Goal_annoucement":
             self.__set_goal(msg=msg)
 
         elif msg.type == "Collision":
-            from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+            from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
-            msg_content = json.loads(msg.memo)
+            msg_content = json.loads(msg.data)
 
             cone_ref = msg_content["cone_triggered"]
 
@@ -194,13 +215,13 @@ class RLB_viz_gui(
 
                 # -> Flag triggered cone
                 if cone_ref in vision_cones.keys():
-                    self.team_members[msg.robot_id][cone_ref]["triggered"] = True
+                    self.team_members[msg.source][cone_ref]["triggered"] = True
                 else:
-                    self.team_members[msg.robot_id][cone_ref][msg_content["side"] + "_triggered"] = True  
+                    self.team_members[msg.source][cone_ref][msg_content["side"] + "_triggered"] = True  
 
                 # -> Make relevant patch collection visible
                 for side_cone_ref in side_vision_cones.keys():
-                    self.team_members[msg.robot_id][side_cone_ref][msg_content["side"] + "_vision_cone_artist"].set(visible=True)
+                    self.team_members[msg.source][side_cone_ref][msg_content["side"] + "_vision_cone_artist"].set(visible=True)
             
             elif msg_content["collision_state"] == 0:
                 self.__clear_triggers(msg=msg)
@@ -212,15 +233,15 @@ class RLB_viz_gui(
         from rlb_controller.robot_parameters import vision_cones, side_vision_cones
 
         for cone_ref in vision_cones.keys():
-            self.team_members[msg.robot_id][cone_ref]["triggered"] = False
+            self.team_members[msg.source][cone_ref]["triggered"] = False
 
         for cone_ref in side_vision_cones.keys():
-            self.team_members[msg.robot_id][cone_ref]["l_triggered"] = False
-            self.team_members[msg.robot_id][cone_ref]["r_triggered"] = False
+            self.team_members[msg.source][cone_ref]["l_triggered"] = False
+            self.team_members[msg.source][cone_ref]["r_triggered"] = False
 
             # -> Hide side collision patches
-            self.team_members[msg.robot_id][cone_ref]["l_vision_cone_artist"].set(visible=False)
-            self.team_members[msg.robot_id][cone_ref]["r_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.source][cone_ref]["l_vision_cone_artist"].set(visible=False)
+            self.team_members[msg.source][cone_ref]["r_vision_cone_artist"].set(visible=False)
 
 
     def goal_subscriber_callback(self, msg):
@@ -382,7 +403,7 @@ class RLB_viz_gui(
         # -> Save goal to member's dict
         goal = json.loads(msg.memo)
 
-        self.team_members[msg.robot_id]["goal"]["id"] = goal["id"]
+        self.team_members[msg.source]["goal"]["id"] = goal["id"]
 
         sequence_xs = []
         sequence_ys = []
@@ -391,27 +412,28 @@ class RLB_viz_gui(
             sequence_xs.append(point[0])
             sequence_ys.append(point[1])
 
-        self.team_members[msg.robot_id]["goal"]["x"] = sequence_xs
-        self.team_members[msg.robot_id]["goal"]["y"] = sequence_ys
+        self.team_members[msg.source]["goal"]["x"] = sequence_xs
+        self.team_members[msg.source]["goal"]["y"] = sequence_ys
 
         # -> Set widget view
-        self.team_members[msg.robot_id]["overview_widget"].ui.goal_id.setText(goal["id"])
+        self.team_members[msg.source]["overview_widget"].ui.goal_id.setText(goal["id"])
 
         if sequence_xs and sequence_ys:
-            self.team_members[msg.robot_id]["overview_widget"].ui.goal_x.setText(str(round(sequence_xs[0], 2)))
-            self.team_members[msg.robot_id]["overview_widget"].ui.goal_y.setText(str(round(sequence_ys[0], 2)))
+            self.team_members[msg.source]["overview_widget"].ui.goal_x.setText(str(round(sequence_xs[0], 2)))
+            self.team_members[msg.source]["overview_widget"].ui.goal_y.setText(str(round(sequence_ys[0], 2)))
         else:
-            self.team_members[msg.robot_id]["overview_widget"].ui.goal_x.setText("-")
-            self.team_members[msg.robot_id]["overview_widget"].ui.goal_y.setText("-")
+            self.team_members[msg.source]["overview_widget"].ui.goal_x.setText("-")
+            self.team_members[msg.source]["overview_widget"].ui.goal_y.setText("-")
 
     def __manual_add_robot(self):
         msg = TeamComm()
-        msg.robot_id = self.ui.add_robot_text_entry.text()
+        msg.source = self.ui.add_robot_text_entry.text()
+        msg.source_type = "robot"
         msg.type = "Initial"
         msg.memo = ""
 
         # -> Add robot if not already added
-        if msg.robot_id not in self.team_members.keys():
+        if msg.source not in self.team_members.keys():
             self.add_robot(msg=msg)
 
     def plot_robots(self):
@@ -449,7 +471,7 @@ class RLB_viz_gui(
 
     def add_robot(self, msg):
         # ---------------- Add team member entry to team members dict
-        self.team_members[msg.robot_id] = {
+        self.team_members[msg.source] = {
             # -> Base setup
             "overview_widget": Member_overview_widget(), 
             "state": None,
@@ -504,16 +526,16 @@ class RLB_viz_gui(
         self.rlb_gazebo_add_robot(msg=msg)
 
         # -> Update member widget
-        self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setText(msg.robot_id)
-        self.team_members[msg.robot_id]["overview_widget"].ui.robot_name.setStyleSheet("font-weight: bold")
+        self.team_members[msg.source]["overview_widget"].ui.robot_name.setText(msg.source)
+        self.team_members[msg.source]["overview_widget"].ui.robot_name.setStyleSheet("font-weight: bold")
 
-        self.team_members[msg.robot_id]["overview_widget"].ui.goal_id.setText("None")
+        self.team_members[msg.source]["overview_widget"].ui.goal_id.setText("None")
 
         # -> Connect buttons
-        self.team_members[msg.robot_id]["overview_widget"].ui.remove_robot.clicked.connect(partial(self.remove_robot, msg.robot_id))
+        self.team_members[msg.source]["overview_widget"].ui.remove_robot.clicked.connect(partial(self.remove_robot, msg.source))
 
         # -> Add member overview widget to main ui
-        self.ui.fleet_overview_layout_room.addWidget(self.team_members[msg.robot_id]["overview_widget"].ui)
+        self.ui.fleet_overview_layout_room.addWidget(self.team_members[msg.source]["overview_widget"].ui)
 
         # -> Create pose subscribers
         qos = QoSProfile(
@@ -522,10 +544,10 @@ class RLB_viz_gui(
             depth=1
             )
 
-        self.team_members[msg.robot_id]["pose_subscriber"] = self.node.create_subscription(
+        self.team_members[msg.source]["pose_subscriber"] = self.node.create_subscription(
             msg_type=PoseStamped,
-            topic=f"/{msg.robot_id}/pose",
-            callback=partial(self.pose_subscriber_callback, msg.robot_id),
+            topic=f"/{msg.source}/state/pose",
+            callback=partial(self.pose_subscriber_callback, msg.source),
             qos_profile=qos
             )
 
@@ -536,10 +558,10 @@ class RLB_viz_gui(
             depth=1
             )
 
-        self.team_members[msg.robot_id]["pose_projected_subscriber"] = self.node.create_subscription(
+        self.team_members[msg.source]["pose_projected_subscriber"] = self.node.create_subscription(
             msg_type=PoseStamped,
-            topic=f"/{msg.robot_id}/pose_projected",
-            callback=partial(self.pose_projected_subscriber_callback, msg.robot_id),
+            topic=f"/{msg.source}/state/pose_projected",
+            callback=partial(self.pose_projected_subscriber_callback, msg.source),
             qos_profile=qos
             )
 
@@ -550,10 +572,10 @@ class RLB_viz_gui(
             depth=1
             )
 
-        self.team_members[msg.robot_id]["lazer_scan_subscriber"] = self.node.create_subscription(
+        self.team_members[msg.source]["lazer_scan_subscriber"] = self.node.create_subscription(
             msg_type=LaserScan,
-            topic=f"/{msg.robot_id}/scan",
-            callback=partial(self.lazer_scan_subscriber_callback, msg.robot_id),
+            topic=f"/{msg.source}/state/scan",
+            callback=partial(self.lazer_scan_subscriber_callback, msg.source),
             qos_profile=qos
         )
 
