@@ -98,7 +98,7 @@ class RLB_viz_gui(
         self.comm_rays = {}
         
         # ==================================================== Create publishers
-        # ----------------------------------- Team communications publisher
+        # ----------------------------------- rlb_msgs publisher
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
             history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
@@ -111,7 +111,7 @@ class RLB_viz_gui(
             )
 
         # ==================================================== Create subscribers
-        # ----------------------------------- Team communications subscriber
+        # ----------------------------------- rlb_msgs subscriber
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.RMW_QOS_POLICY_RELIABILITY_RELIABLE,
             history=QoSHistoryPolicy.RMW_QOS_POLICY_HISTORY_KEEP_ALL,
@@ -120,7 +120,7 @@ class RLB_viz_gui(
         self.team_comms_subscriber = self.node.create_subscription(
             msg_type=TeamComm,
             topic="/rlb_msgs",
-            callback=self.team_msg_subscriber_callback,
+            callback=self.rlb_msg_subscriber_callback,
             qos_profile=qos
             )
 
@@ -196,11 +196,11 @@ class RLB_viz_gui(
             self.add_robot(msg=msg)
 
     # ---------------------------------- Subscribers
-    def team_msg_subscriber_callback(self, msg):
+    def rlb_msg_subscriber_callback(self, msg):
         if msg.source not in self.team_members.keys() and msg.source_type == "robot" and self.ui.auto_add_robots.isChecked():
             self.add_robot(msg=msg)
 
-        if msg.type == "Goal_annoucement":
+        if msg.type == "Goal_announcement":
             self.__set_goal(msg=msg)
 
         elif msg.type == "Collision":
@@ -230,7 +230,7 @@ class RLB_viz_gui(
         self.ui.team_comms_msgs.setPlainText(str(msg))
 
     def __clear_triggers(self, msg):
-        from rlb_controller.robot_parameters import vision_cones, side_vision_cones
+        from rlb_config.robot_parameters import vision_cones, side_vision_cones
 
         for cone_ref in vision_cones.keys():
             self.team_members[msg.source][cone_ref]["triggered"] = False
@@ -546,7 +546,7 @@ class RLB_viz_gui(
 
         self.team_members[msg.source]["pose_subscriber"] = self.node.create_subscription(
             msg_type=PoseStamped,
-            topic=f"/{msg.source}/state/pose",
+            topic=f"/{msg.source}/pose",
             callback=partial(self.pose_subscriber_callback, msg.source),
             qos_profile=qos
             )
@@ -560,7 +560,7 @@ class RLB_viz_gui(
 
         self.team_members[msg.source]["pose_projected_subscriber"] = self.node.create_subscription(
             msg_type=PoseStamped,
-            topic=f"/{msg.source}/state/pose_projected",
+            topic=f"/{msg.source}/pose_projected",
             callback=partial(self.pose_projected_subscriber_callback, msg.source),
             qos_profile=qos
             )
@@ -574,7 +574,7 @@ class RLB_viz_gui(
 
         self.team_members[msg.source]["lazer_scan_subscriber"] = self.node.create_subscription(
             msg_type=LaserScan,
-            topic=f"/{msg.source}/state/scan",
+            topic=f"/{msg.source}/scan",
             callback=partial(self.lazer_scan_subscriber_callback, msg.source),
             qos_profile=qos
         )

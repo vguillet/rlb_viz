@@ -43,13 +43,6 @@
             </property>
            </spacer>
           </item>
-          <item>
-           <widget class="QCheckBox" name="checkBox_8">
-            <property name="text">
-             <string>CheckBox</string>
-            </property>
-           </widget>
-          </item>
          </layout>
         </item>
         <item>
@@ -571,6 +564,9 @@
          </item>
          <item row="3" column="2">
           <widget class="QSpinBox" name="turtlebot_emulated_count">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="minimum">
             <number>1</number>
            </property>
@@ -588,6 +584,9 @@
          </item>
          <item row="9" column="1">
           <widget class="QPushButton" name="launch_comms_sim">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="text">
             <string>Launch</string>
            </property>
@@ -662,6 +661,9 @@
          </item>
          <item row="6" column="1">
           <widget class="QPushButton" name="launch_controllers">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="text">
             <string>Launch</string>
            </property>
@@ -669,6 +671,9 @@
          </item>
          <item row="6" column="2">
           <widget class="QSpinBox" name="controller_count">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="minimum">
             <number>1</number>
            </property>
@@ -693,6 +698,9 @@
          </item>
          <item row="3" column="1">
           <widget class="QPushButton" name="launch_turtlebots_emulated">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
            <property name="text">
             <string>Launch</string>
            </property>
@@ -714,6 +722,12 @@
          </item>
          <item row="12" column="1">
           <widget class="QPushButton" name="simple_sim_launch">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="toolTip">
+            <string/>
+           </property>
            <property name="text">
             <string>Simple sim</string>
            </property>
@@ -752,7 +766,7 @@
               <x>0</x>
               <y>0</y>
               <width>543</width>
-              <height>496</height>
+              <height>405</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_12">
@@ -848,7 +862,7 @@
               <x>0</x>
               <y>0</y>
               <width>557</width>
-              <height>70</height>
+              <height>161</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_7">
@@ -901,7 +915,7 @@
               <x>0</x>
               <y>0</y>
               <width>557</width>
-              <height>70</height>
+              <height>161</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_8">
